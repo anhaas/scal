@@ -705,7 +705,7 @@ bool lcrq_dequeue(uint64_t *item) {
 
     while (1) {
         RingQueue *rq = head;
-        RingQueue *next;
+        RingQueue *next = rq->next;
 
 #ifdef HAVE_HPTRS
         SWAP(&hazardptr, rq);
@@ -765,12 +765,13 @@ bool lcrq_dequeue(uint64_t *item) {
         if (tail_index(rq->tail) - 1 <= h) {
             fixState(rq);
             // try to return empty
-            next = rq->next;
-            if (next == null) {
+//            next = rq->next;
+            if (rq->next == NULL) {
               *item = 0;
                 return false;  // EMPTY
+            } else if (next != NULL) {
+              CASPTR(&head, rq, next);
             }
-            CASPTR(&head, rq, next);
         }
     }
 }
