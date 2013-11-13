@@ -384,13 +384,13 @@ class TSQueue : public Queue<T> {
   int64_t* *counter2_;
   uint64_t num_threads_;
 
-  inline void inc_counter1() {
+  inline void inc_counter1(uint64_t value) {
     uint64_t thread_id = scal::ThreadContext::get().thread_id();
-    (*counter1_[thread_id])++;
+    (*counter1_[thread_id]) += value;
   }
-  inline void inc_counter2() {
+  inline void inc_counter2(uint64_t value) {
     uint64_t thread_id = scal::ThreadContext::get().thread_id();
-    (*counter2_[thread_id])++;
+    (*counter2_[thread_id])+= value;
   }
  public:
   explicit TSQueue
@@ -427,12 +427,14 @@ class TSQueue : public Queue<T> {
       sum2 += *counter2_[i];
     }
 
+    double avg = sum1;
+    avg /= (double)sum2;
+
     char buffer[255] = { 0 };
     uint32_t n = snprintf(buffer,
                           sizeof(buffer),
-                          "%ld",
-                          sum1 ? (sum2 / sum1) : 0
-                          );
+                          "%.2f",
+                          avg);
     if (n != strlen(buffer)) {
       fprintf(stderr, "%s: error creating stats string\n", __func__);
       abort();
@@ -451,12 +453,14 @@ bool TSQueue<T>::enqueue(T element) {
 
 template<typename T>
 bool TSQueue<T>::dequeue(T *element) {
-  inc_counter1();
   uint64_t threshold;
+  uint64_t counter = 0;
   threshold = timestamping_->read_time();
   while (buffer_->try_remove_oldest(element, &threshold)) {
-    inc_counter2();
+    counter++;
     if (*element != (T)NULL) {
+      inc_counter1(counter);
+      inc_counter2(1);
       return true;
     }
     threshold = timestamping_->read_time();

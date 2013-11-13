@@ -987,17 +987,72 @@ class TSDeque : public Deque<T> {
   TSDequeBuffer<T> *buffer_;
   TimeStamp *timestamping_;
   bool init_threshold_;
+  uint64_t num_threads_;
+  uint64_t* *counter1_;
+  uint64_t* *counter2_;
+
  public:
   explicit TSDeque
     (TSDequeBuffer<T> *buffer, TimeStamp *timestamping, 
-     bool init_threshold)
+     bool init_threshold, uint64_t num_threads)
     : buffer_(buffer), timestamping_(timestamping),
-      init_threshold_(init_threshold) {
+      init_threshold_(init_threshold), num_threads_(num_threads) {
+
+    counter1_ = static_cast<uint64_t**>(
+        scal::calloc_aligned(num_threads, sizeof(uint64_t*),
+          scal::kCachePrefetch * 4));
+    counter2_ = static_cast<uint64_t**>(
+        scal::calloc_aligned(num_threads, sizeof(uint64_t*),
+          scal::kCachePrefetch * 4));
+
+    for (uint64_t i = 0; i < num_threads; i++) {
+      counter1_[i] = scal::get<uint64_t>(scal::kCachePrefetch * 4);
+      *(counter1_[i]) = 0;
+      counter2_[i] = scal::get<uint64_t>(scal::kCachePrefetch * 4);
+      *(counter2_[i]) = 0;
+    }
   }
   bool insert_left(T item);
   bool remove_left(T *item);
   bool insert_right(T item);
   bool remove_right(T *item);
+
+  inline void inc_counter1(uint64_t value) {
+    uint64_t thread_id = scal::ThreadContext::get().thread_id();
+    (*counter1_[thread_id]) += value;
+  }
+  
+  inline void inc_counter2(uint64_t value) {
+    uint64_t thread_id = scal::ThreadContext::get().thread_id();
+    (*counter2_[thread_id]) += value;
+  }
+  
+  char* ds_get_stats(void) {
+
+    uint64_t sum1 = 0;
+    uint64_t sum2 = 0;
+
+    for (int i = 0; i < num_threads_; i++) {
+      sum1 += *counter1_[i];
+      sum2 += *counter2_[i];
+    }
+
+    double avg = sum1;
+    avg /= (double)sum2;
+
+    char buffer[255] = { 0 };
+    uint32_t n = snprintf(buffer,
+                          sizeof(buffer),
+                          "tries: %.2f",
+                          avg);
+    if (n != strlen(buffer)) {
+      fprintf(stderr, "%s: error creating stats string\n", __func__);
+      abort();
+    }
+    char *newbuf = static_cast<char*>(calloc(
+        strlen(buffer) + 1, sizeof(*newbuf)));
+    return strncpy(newbuf, buffer, strlen(buffer));
+  }
 };
 
 template<typename T>
@@ -1016,6 +1071,7 @@ bool TSDeque<T>::insert_right(T element) {
 template<typename T>
 bool TSDeque<T>::remove_left(T *element) {
   int64_t threshold[2];
+  uint64_t counter = 0;
   if (init_threshold_) {
     //threshold[1] is positive because defines a point in time independent
     //of the side of the insert.
@@ -1030,7 +1086,10 @@ bool TSDeque<T>::remove_left(T *element) {
 
   while (
     buffer_->try_remove_left(element, threshold)) {
+    counter++;
     if (*element != (T)NULL) {
+      inc_counter1(counter);
+      inc_counter2(1);
       return true;
     }
   }
@@ -1040,6 +1099,7 @@ bool TSDeque<T>::remove_left(T *element) {
 template<typename T>
 bool TSDeque<T>::remove_right(T *element) {
   int64_t threshold[2];
+  uint64_t counter = 0;
   if (init_threshold_) {
     //threshold[1] is positive because defines a point in time independent
     //of the side of the insert.
@@ -1054,7 +1114,10 @@ bool TSDeque<T>::remove_right(T *element) {
 
   while (
     buffer_->try_remove_right(element, threshold)) {
+    counter++;
     if (*element != (T)NULL) {
+      inc_counter1(counter);
+      inc_counter2(1);
       return true;
     }
   }

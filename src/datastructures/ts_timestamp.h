@@ -142,6 +142,25 @@ class HardwareTimeStamp : public TimeStamp {
 //////////////////////////////////////////////////////////////////////
 // A TimeStamp class based on a hardware counter
 //////////////////////////////////////////////////////////////////////
+class HardwarePTimeStamp : public TimeStamp {
+  private:
+
+
+  public:
+    HardwarePTimeStamp() {
+    }
+  
+    uint64_t get_timestamp() {
+      return get_hwptime();
+    }
+    uint64_t read_time() {
+      return get_hwptime();
+    }
+};
+
+//////////////////////////////////////////////////////////////////////
+// A TimeStamp class based on a hardware counter
+//////////////////////////////////////////////////////////////////////
 class ShiftedHardwareTimeStamp : public TimeStamp {
   private:
 

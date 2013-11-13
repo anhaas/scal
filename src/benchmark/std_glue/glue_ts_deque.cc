@@ -14,11 +14,14 @@ DEFINE_bool(2ts, false, "use the 2-time-stamp inner buffer");
 DEFINE_bool(stutter_clock, false, "use the stuttering clock");
 DEFINE_bool(atomic_clock, false, "use atomic fetch-and-inc clock");
 DEFINE_bool(hw_clock, false, "use the RDTSC hardware clock");
+DEFINE_bool(hwp_clock, false, "use the RDTSCP hardware clock");
 DEFINE_bool(init_threshold, true, "initializes the dequeue threshold "
     "with the current time");
 DEFINE_int64(delay, 0, "delay in the insert operation");
 
-uint64_t g_delay;
+TSDeque<uint64_t> *ts_;
+
+int64_t g_delay;
 
 void* ds_new() {
 
@@ -29,6 +32,8 @@ void* ds_new() {
     timestamping = new AtomicCounterTimeStamp();
   } else if (FLAGS_hw_clock) {
     timestamping = new ShiftedHardwareTimeStamp();
+  } else if (FLAGS_hwp_clock) {
+    timestamping = new HardwarePTimeStamp();
   } else {
     timestamping = new ShiftedHardwareTimeStamp();
   }
@@ -52,22 +57,12 @@ void* ds_new() {
   } else {
     buffer = new TLLinkedListDequeBuffer<uint64_t>(g_num_threads + 1);
   }
-  TSDeque<uint64_t> *ts =
-      new TSDeque<uint64_t>(buffer, timestamping, FLAGS_init_threshold);
-  return static_cast<void*>(ts);
+  ts_ =
+      new TSDeque<uint64_t>(buffer, timestamping, FLAGS_init_threshold,
+          g_num_threads + 1);
+  return static_cast<void*>(ts_);
 }
 
 char* ds_get_stats(void) {
-  char buffer[255] = { 0 };
-  uint32_t n = snprintf(buffer,
-                        sizeof(buffer),
-                        "%" PRIu64 "",
-                        g_delay);
-  if (n != strlen(buffer)) {
-    fprintf(stderr, "%s: error creating stats string\n", __func__);
-    abort();
-  }
-  char *newbuf = static_cast<char*>(calloc(
-      strlen(buffer) + 1, sizeof(*newbuf)));
-  return strncpy(newbuf, buffer, strlen(buffer));
+  return ts_->ds_get_stats();
 }
