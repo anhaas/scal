@@ -75,22 +75,11 @@ class EliminationBackoffStack : public Stack<T>, public PartialPoolInterface {
   inline bool get_return_empty_state(T *item, AtomicRaw *state);
 
   char* ds_get_stats(void) {
-
-    int64_t sum1 = 0;
-    int64_t sum2 = 0;
-
-    for (int i = 0; i < num_threads_; i++) {
-      sum1 += *counter1_[i];
-      sum2 += *counter2_[i];
-    }
-
     char buffer[255] = { 0 };
     uint32_t n = snprintf(buffer,
                           sizeof(buffer),
-                          "%ld %ld %ld",
-                          sum1, sum2, 
-                          sum1 ? (sum2 / sum1) : 0
-                          );
+                          "collision: %ld ;delay: %ld",
+                          size_collision_, delay_);
     if (n != strlen(buffer)) {
       fprintf(stderr, "%s: error creating stats string\n", __func__);
       abort();
@@ -113,21 +102,10 @@ class EliminationBackoffStack : public Stack<T>, public PartialPoolInterface {
   const uint64_t size_collision_;
   const uint64_t delay_;
   const uint64_t num_threads_;
-  int64_t* *counter1_;
-  int64_t* *counter2_;
 
   bool try_collision(uint64_t thread_id, uint64_t other, T *item);
   bool backoff(Opcode opcode, T *item);
 
-  inline void inc_counter1() {
-    uint64_t thread_id = scal::ThreadContext::get().thread_id();
-    (*counter1_[thread_id])++;
-  }
-
-  inline void inc_counter2() {
-    uint64_t thread_id = scal::ThreadContext::get().thread_id();
-    (*counter2_[thread_id])++;
-  }
 };
 
 template<typename T>
@@ -149,14 +127,6 @@ EliminationBackoffStack<T>::EliminationBackoffStack(
       scal::calloc_aligned(size_collision_,
           sizeof(AtomicValue<uint64_t>*), scal::kCachePrefetch * 4));
   
-  counter1_ = static_cast<int64_t**>(
-      scal::calloc_aligned(num_threads, sizeof(uint64_t*), 
-        scal::kCachePrefetch * 4));
-
-  counter2_ = static_cast<int64_t**>(
-      scal::calloc_aligned(num_threads, sizeof(uint64_t*), 
-        scal::kCachePrefetch * 4));
-
   for (uint64_t i = 0; i < num_threads; i++) {
     operations_[i] = scal::get<Operation>(scal::kCachePrefetch * 4);
   }
@@ -168,13 +138,6 @@ EliminationBackoffStack<T>::EliminationBackoffStack(
   for (uint64_t i = 0; i < size_collision_; i++) {
     collision_[i] = 
       scal::get<std::atomic<uint64_t>>(scal::kCachePrefetch * 4);
-  }
-
-  for (uint64_t i = 0; i < num_threads; i++) {
-    counter1_[i] = scal::get<int64_t>(scal::kCachePrefetch * 4);
-    *(counter1_[i]) = 0;
-    counter2_[i] = scal::get<int64_t>(scal::kCachePrefetch * 4);
-    *(counter2_[i]) = 0;
   }
 }
 
@@ -225,7 +188,6 @@ bool EliminationBackoffStack<T>::backoff(Opcode opcode, T *item) {
         him, thread_id)) { 
   }
   if (him != EMPTY) {
-//    inc_counter1();
     uint64_t other = location_[him]->load();
     if (other == him && 
         operations_[other]->opcode != opcode) {
@@ -233,7 +195,6 @@ bool EliminationBackoffStack<T>::backoff(Opcode opcode, T *item) {
       if (location_[thread_id]->compare_exchange_weak(
             expected, EMPTY)) {
         if (try_collision(thread_id, other, item)) {
-//      inc_counter2();
          return true;
         } else {
           return false;
@@ -243,7 +204,6 @@ bool EliminationBackoffStack<T>::backoff(Opcode opcode, T *item) {
           *item = operations_[location_[thread_id]->load()]->data;
           location_[thread_id]->store(0);
         }
-//      inc_counter2();
         return true;
       }
     }
@@ -260,7 +220,6 @@ bool EliminationBackoffStack<T>::backoff(Opcode opcode, T *item) {
       *item = operations_[location_[thread_id]->load()]->data;
       location_[thread_id]->store(EMPTY);
     }
-//      inc_counter2();
     return true;
   }
 
@@ -268,6 +227,9 @@ bool EliminationBackoffStack<T>::backoff(Opcode opcode, T *item) {
 }
 template<typename T>
 bool EliminationBackoffStack<T>::push(T item) {
+      if (backoff(Opcode::Push, &item)) {
+        return true;
+      }
   Node *n = scal::tlget<Node>(0);
   n->data = item;
   AtomicPointer<Node*> top_old;
@@ -291,6 +253,9 @@ bool EliminationBackoffStack<T>::push(T item) {
 
 template<typename T>
 bool EliminationBackoffStack<T>::pop(T *item) {
+      if (backoff(Opcode::Pop, item)) {
+        return true;
+      }
   AtomicPointer<Node*> top_old;
   AtomicPointer<Node*> top_new;
   while (true) {
