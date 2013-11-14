@@ -13,6 +13,7 @@ DEFINE_bool(list, false, "use the linked-list-based inner buffer");
 DEFINE_bool(stutter_clock, false, "use the stuttering clock");
 DEFINE_bool(atomic_clock, false, "use atomic fetch-and-inc clock");
 DEFINE_bool(hw_clock, false, "use the RDTSC hardware clock");
+DEFINE_bool(hwp_clock, false, "use the RDTSCP hardware clock");
 DEFINE_uint64(delay, 0, "delay in the insert operation");
 
 TSQueue<uint64_t> *ts;
@@ -24,6 +25,8 @@ void* ds_new() {
     timestamping = new AtomicCounterTimeStamp();
   } else if (FLAGS_hw_clock) {
     timestamping = new HardwareTimeStamp();
+  } else if (FLAGS_hwp_clock) {
+    timestamping = new HardwarePTimeStamp();
   } else {
     timestamping = new HardwareTimeStamp();
   }
