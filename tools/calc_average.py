@@ -2,6 +2,13 @@ import sys
 import os
 import shutil
 
+def isfloat(s):
+  try:
+    float(s)
+    return True
+  except ValueError:
+    return False
+
 def calculateAverage(filename, directories, outputDir):
   contents = []
   for directory in directories :
@@ -27,13 +34,14 @@ def calculateAverage(filename, directories, outputDir):
       if len(content) < numValues:
         print("One of the files is invalid, not enough values: {filename}".format(filename=filename))
         return
-      if content[i].isdigit():
+#      if content[i].isdigit():
+      if isfloat(content[i]):
         values[i] = values[i] + float(content[i])
     values[i] /= len(directories)
 
   result = ''
   for i in range(numValues):
-    if contents[0][i].isdigit():
+    if isfloat(contents[0][i]):
       result += str(values[i]) + ' '
     elif not '\n' in contents[0][i]:
       result += contents[0][i] + ' '
