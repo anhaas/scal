@@ -448,7 +448,7 @@ inline static int64_t _FAA64(volatile int64_t *A, int64_t B) {
 // --------------------
 // The LCRQ's ring size will be 2^{RING_POW}.
 #ifndef RING_POW
-#define RING_POW        (12)
+#define RING_POW        (17)
 #endif
 #define RING_SIZE       (1ull << RING_POW)
 
@@ -695,7 +695,7 @@ alloc:
 
         uint64_t h = rq->head;
 
-        if (unlikely(t - h >= RING_SIZE) && close_crq(rq, t, ++try_close)) {
+        if (unlikely((int64_t)(t - h) >= (int64_t)RING_SIZE) && close_crq(rq, t, ++try_close)) {
             goto alloc;
         }
     }
@@ -753,7 +753,7 @@ bool lcrq_dequeue(uint64_t *item) {
                 if (unlikely(unsafe)) { // Nothing to do, move along
                     if (CAS2((uint64_t*)cell, val, cell_idx, val, unsafe | h + RING_SIZE))
                         break;
-                } else if (t - 1 <= h || r > 200000 || crq_closed) {
+                } else if (t < h + 1 || r > 200000 || crq_closed) {
                     if (CAS2((uint64_t*)cell, val, idx, val, h + RING_SIZE))
                         break;
                 } else {
@@ -762,7 +762,7 @@ bool lcrq_dequeue(uint64_t *item) {
             }
         }
 
-        if (tail_index(rq->tail) - 1 <= h) {
+        if (tail_index(rq->tail) <= h + 1) {
             fixState(rq);
             // try to return empty
             next = rq->next;
@@ -770,7 +770,10 @@ bool lcrq_dequeue(uint64_t *item) {
               *item = 0;
                 return false;  // EMPTY
             }
-            CASPTR(&head, rq, next);
+
+            if (tail_index(rq->tail) <= h + 1) {
+              CASPTR(&head, rq, next);
+            }
         }
     }
 }
