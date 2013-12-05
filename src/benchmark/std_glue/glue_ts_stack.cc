@@ -22,32 +22,36 @@ DEFINE_uint64(delay, 0, "delay in the insert operation");
 TSStack<uint64_t> *ts_;
 
 void* ds_new() {
-  TimeStamp *timestamping;
-  if (FLAGS_stutter_clock) {
-    timestamping = new StutteringTimeStamp(g_num_threads + 1);
-  } else if (FLAGS_atomic_clock) {
-    timestamping = new AtomicCounterTimeStamp();
-  } else if (FLAGS_hw_clock) {
-    timestamping = new HardwareTimeStamp();
-  } else if (FLAGS_hwp_clock) {
-    timestamping = new HardwarePTimeStamp();
-  } else {
-    timestamping = new HardwareTimeStamp();
-  }
-  TSStackBuffer<uint64_t> *buffer;
-  if (FLAGS_array) {
-    buffer = new TLArrayStackBuffer<uint64_t>(g_num_threads + 1);
-  } else if (FLAGS_list) {
-    buffer = new TLLinkedListStackBuffer<uint64_t>(g_num_threads + 1);
-  } else if (FLAGS_2ts) {
-    buffer 
-      = new TL2TSStackBuffer<uint64_t>(g_num_threads + 1, FLAGS_delay);
-  } else {
-    buffer 
-      = new TL2TSStackBuffer<uint64_t>(g_num_threads + 1, FLAGS_delay);
-  }
-  ts_ = new TSStack<uint64_t>
-        (buffer, timestamping, FLAGS_init_threshold, g_num_threads + 1);
+//   TimeStamp *timestamping;
+//   if (FLAGS_stutter_clock) {
+//     timestamping = new StutteringTimeStamp(g_num_threads + 1);
+//   } else if (FLAGS_atomic_clock) {
+//     timestamping = new AtomicCounterTimeStamp();
+//   } else if (FLAGS_hw_clock) {
+//     timestamping = new HardwareTimeStamp();
+//   } else if (FLAGS_hwp_clock) {
+//     timestamping = new HardwarePTimeStamp();
+//   } else {
+//     timestamping = new HardwareTimeStamp();
+//   }
+//   TSStackBuffer<uint64_t> *buffer;
+//   if (FLAGS_array) {
+//     buffer = new TLArrayStackBuffer<uint64_t>(g_num_threads + 1);
+//   } else if (FLAGS_list) {
+//     buffer = new TLLinkedListStackBuffer<uint64_t>(g_num_threads + 1);
+//   } else if (FLAGS_2ts) {
+//     buffer 
+//       = new TL2TSStackBuffer<uint64_t>(g_num_threads + 1, FLAGS_delay);
+//   } else {
+//     buffer 
+//       = new TL2TSStackBuffer<uint64_t>(g_num_threads + 1, FLAGS_delay);
+//   }
+//   ts_ = new TSStack<uint64_t>
+//         (buffer, timestamping, FLAGS_init_threshold, g_num_threads + 1);
+  ts_ = new TSStack<uint64_t>(
+      new TL2TSStackBuffer<uint64_t>(g_num_threads + 1, FLAGS_delay),
+      new HardwarePTimeStamp(),
+      true, g_num_threads + 1);
   return static_cast<void*>(ts_);
 }
 

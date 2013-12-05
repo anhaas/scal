@@ -26,7 +26,7 @@
 template<typename T>
 class TSStackBuffer {
   public:
-    virtual void insert_element(T element, TimeStamp *timestamp) = 0;
+    virtual void insert_element(T element, HardwarePTimeStamp *timestamp) = 0;
     virtual bool try_remove_youngest(T *element, uint64_t *threshold) = 0;
 };
 
@@ -116,7 +116,7 @@ class TLArrayStackBuffer : public TSStackBuffer<T> {
       }
     }
 
-    void insert_element(T element, TimeStamp *timestamp) {
+    void insert_element(T element, HardwarePTimeStamp *timestamp) {
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
 
       Item *new_item = scal::tlget_aligned<Item>(scal::kCachePrefetch);
@@ -339,7 +339,7 @@ class TLLinkedListStackBuffer : public TSStackBuffer<T> {
     /////////////////////////////////////////////////////////////////
     // insert_element
     /////////////////////////////////////////////////////////////////
-    void insert_element(T element, TimeStamp *timestamp) {
+    void insert_element(T element, HardwarePTimeStamp *timestamp) {
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
 
       Item *new_item = scal::tlget_aligned<Item>(scal::kCachePrefetch);
@@ -543,7 +543,7 @@ class TL2TSStackBuffer : public TSStackBuffer<T> {
     /////////////////////////////////////////////////////////////////
     // insert_element
     /////////////////////////////////////////////////////////////////
-    void insert_element(T element, TimeStamp *timestamp) {
+    void insert_element(T element,HardwarePTimeStamp *timestamp) {
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
 
       Item *new_item = scal::tlget_aligned<Item>(scal::kCachePrefetch);
@@ -675,8 +675,8 @@ class TL2TSStackBuffer : public TSStackBuffer<T> {
 template<typename T>
 class TSStack : public Stack<T> {
  private:
-  TSStackBuffer<T> *buffer_;
-  TimeStamp *timestamping_;
+  TL2TSStackBuffer<T> *buffer_;
+  HardwarePTimeStamp *timestamping_;
   bool init_threshold_;
 
   uint64_t* *counter1_;
@@ -685,7 +685,7 @@ class TSStack : public Stack<T> {
 
  public:
   explicit TSStack
-    (TSStackBuffer<T> *buffer, TimeStamp *timestamping, 
+    (TL2TSStackBuffer<T> *buffer, HardwarePTimeStamp *timestamping, 
      bool init_threshold, uint64_t num_threads) 
     : buffer_(buffer), timestamping_(timestamping),
       init_threshold_(init_threshold), num_threads_(num_threads) {
