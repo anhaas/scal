@@ -7,6 +7,7 @@
 #include "benchmark/std_glue/std_pipe_api.h"
 #include "datastructures/ts_timestamp.h"
 #include "datastructures/ts_stack.h"
+#include "datastructures/ts_deque.h"
 
 DEFINE_bool(array, false, "use the array-based inner buffer");
 DEFINE_bool(list, false, "use the linked-list-based inner buffer");
@@ -19,7 +20,9 @@ DEFINE_bool(init_threshold, true, "initializes the dequeue threshold "
     "with the current time");
 DEFINE_uint64(delay, 0, "delay in the insert operation");
 
-TSStack<uint64_t> *ts_;
+// TL2TSStackBuffer<uint64_t> *ts_;
+TSStack<uint64_t, TL2TSStackBuffer<uint64_t, HardwarePTimeStamp>
+  , HardwarePTimeStamp> *ts_;
 
 void* ds_new() {
 //   TimeStamp *timestamping;
@@ -48,13 +51,23 @@ void* ds_new() {
 //   }
 //   ts_ = new TSStack<uint64_t>
 //         (buffer, timestamping, FLAGS_init_threshold, g_num_threads + 1);
-  ts_ = new TSStack<uint64_t>(
-      new TL2TSStackBuffer<uint64_t>(g_num_threads + 1, FLAGS_delay),
-      new HardwarePTimeStamp(),
-      true, g_num_threads + 1);
-  return static_cast<void*>(ts_);
+//   ts_ = new TSStack<uint64_t>(
+//       new TL2TSStackBuffer<uint64_t>(g_num_threads + 1, FLAGS_delay),
+//       new HardwarePTimeStamp(),
+//       true, g_num_threads + 1);
+//   return static_cast<void*>(ts_);
+  ts_ =  new TSStack<uint64_t, 
+      TL2TSStackBuffer<uint64_t, HardwarePTimeStamp>, HardwarePTimeStamp>
+        (g_num_threads + 1, FLAGS_delay);
+  return ts_;
+  return new TSStack<uint64_t, 
+      TL2TSStackBuffer<uint64_t, HardwarePTimeStamp>, HardwarePTimeStamp>
+        (g_num_threads + 1, FLAGS_delay);
+  return new TSStack<uint64_t, TL2TSDequeBuffer<uint64_t, HardwarePTimeStamp>, HardwarePTimeStamp>
+    (g_num_threads + 1, FLAGS_delay);
 }
 
 char* ds_get_stats(void) {
   return ts_->ds_get_stats();
+//  return NULL;
 }

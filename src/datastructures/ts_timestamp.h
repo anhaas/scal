@@ -145,16 +145,57 @@ class HardwareTimeStamp : public TimeStamp {
 class HardwarePTimeStamp : public TimeStamp {
   private:
 
+    uint64_t delay_;
 
   public:
-    HardwarePTimeStamp() {
-    }
   
-    uint64_t get_timestamp() {
+    inline void set_delay(uint64_t delay) {
+      delay_ = delay;
+    }
+
+    inline void init_sentinel(uint64_t *result) {
+      result[0] = 0;
+      result[1] = 0;
+    }
+
+    inline void init_sentinel_atomic(std::atomic<uint64_t> *result) {
+      result[0].store(0);
+      result[1].store(0);
+    }
+
+    inline void init_top(std::atomic<uint64_t> *result) {
+      result[0].store(UINT64_MAX);
+      result[1].store(UINT64_MAX);
+    }
+
+    inline void load_timestamp(uint64_t *result, std::atomic<uint64_t> *source) {
+      result[0] = source[0].load();
+      result[1] = source[1].load();
+    }
+
+    inline uint64_t get_timestamp() {
       return get_hwptime();
     }
-    uint64_t read_time() {
+
+    inline void get_timestamp(std::atomic<uint64_t> *result) {
+      result[0].store(get_hwptime());
+      uint64_t wait = get_hwtime() + delay_;
+      while (get_hwtime() < wait) {}
+      result[1].store(get_hwptime());
+
+    }
+
+    inline uint64_t read_time() {
       return get_hwptime();
+    }
+
+    inline void read_time(uint64_t *result) {
+      result[0] = get_hwptime();
+      result[1] = result[0];
+    }
+
+    inline bool is_later(uint64_t *timestamp1, uint64_t *timestamp2) {
+      return timestamp2[1] < timestamp1[0];
     }
 };
 
@@ -169,10 +210,10 @@ class ShiftedHardwareTimeStamp : public TimeStamp {
     ShiftedHardwareTimeStamp() {
     }
   
-    uint64_t get_timestamp() {
+    inline uint64_t get_timestamp() {
       return get_hwtime() >> 1;
     }
-    uint64_t read_time() {
+    inline uint64_t read_time() {
       return get_hwtime() >> 1;
     }
 };

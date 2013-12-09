@@ -51,9 +51,9 @@ void* ds_new() {
   TSDequeBuffer<uint64_t> *buffer;
   if (FLAGS_list) {
     buffer = new TLLinkedListDequeBuffer<uint64_t>(g_num_threads + 1);
-  } else if (FLAGS_2ts) {
-    buffer 
-      = new TL2TSDequeBuffer<uint64_t>(g_num_threads + 1, g_delay);
+//  } else if (FLAGS_2ts) {
+//    buffer 
+//      = new TL2TSDequeBuffer<uint64_t>(g_num_threads + 1, g_delay);
   } else {
     buffer = new TLLinkedListDequeBuffer<uint64_t>(g_num_threads + 1);
   }
