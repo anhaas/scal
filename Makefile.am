@@ -33,11 +33,14 @@ DATASTRUCTURE_INCLUDES = \
 	src/datastructures/kstack.h \
 	src/datastructures/lockbased_queue.h \
 	src/datastructures/ms_queue.h \
-	src/datastructures/ah_queue.h \
 	src/datastructures/lcrq.h \
 	src/datastructures/ts_stack.h \
 	src/datastructures/ts_queue.h \
 	src/datastructures/ts_deque.h \
+	src/datastructures/ts_timestamp.h \
+	src/datastructures/ts_stack_buffer.h \
+	src/datastructures/ts_queue_buffer.h \
+	src/datastructures/ts_deque_buffer.h \
 	src/datastructures/enq_pool.h \
 	src/datastructures/spmc_queue.h \
 	src/datastructures/segment_queue.h \
@@ -147,31 +150,71 @@ shortest_path_sq_SOURCES = \
         $(SHORTESTPATH_BASE_OBJS) \
         src/benchmark/std_glue/glue_s_queue.cc
 
-bin_PROGRAMS += shortest-path-ah
-shortest_path_ah_SOURCES = \
-        $(SHORTESTPATH_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ah_queue.cc
-
 bin_PROGRAMS += shortest-path-lcrq
 shortest_path_lcrq_SOURCES = \
         $(SHORTESTPATH_BASE_OBJS) \
 				src/datastructures/lcrq_upstream.cc \
         src/benchmark/std_glue/glue_lcrq.cc
 
-bin_PROGRAMS += shortest-path-tsstack
-shortest_path_tsstack_SOURCES = \
+bin_PROGRAMS += shortest-path-hc-ts-interval-stack
+shortest_path_hc_ts_interval_stack_SOURCES = \
         $(SHORTESTPATH_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_stack.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_interval_stack.cc
 
-bin_PROGRAMS += shortest-path-tsqueue
-shortest_path_tsqueue_SOURCES = \
+bin_PROGRAMS += shortest-path-hc-ts-interval-queue
+shortest_path_hc_ts_interval_queue_SOURCES = \
         $(SHORTESTPATH_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_queue.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_interval_queue.cc
 
-bin_PROGRAMS += shortest-path-tsdeque
-shortest_path_tsdeque_SOURCES = \
+bin_PROGRAMS += shortest-path-hc-ts-hardware-stack
+shortest_path_hc_ts_hardware_stack_SOURCES = \
         $(SHORTESTPATH_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_deque.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_hardware_stack.cc
+
+bin_PROGRAMS += shortest-path-hc-ts-hardware-queue
+shortest_path_hc_ts_hardware_queue_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_hardcoded_ts_hardware_queue.cc
+
+bin_PROGRAMS += shortest-path-ts-interval-stack
+shortest_path_ts_interval_stack_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_stack.cc
+
+bin_PROGRAMS += shortest-path-ts-interval-queue
+shortest_path_ts_interval_queue_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_queue.cc
+
+bin_PROGRAMS += shortest-path-ts-hardware-stack
+shortest_path_ts_hardware_stack_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_stack.cc
+
+bin_PROGRAMS += shortest-path-ts-hardware-queue
+shortest_path_ts_hardware_queue_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_queue.cc
+
+bin_PROGRAMS += shortest-path-ts-interval-deque
+shortest_path_ts_interval_deque_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_deque.cc
+
+bin_PROGRAMS += shortest-path-ts-hardware-deque
+shortest_path_ts_hardware_deque_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_deque.cc
+
+bin_PROGRAMS += shortest-path-ts-atomic-queue
+shortest_path_ts_atomic_queue_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_atomic_queue.cc
+
+bin_PROGRAMS += shortest-path-ts-stutter-queue
+shortest_path_ts_stutter_queue_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_stutter_queue.cc
 
 bin_PROGRAMS += shortest-path-enq
 shortest_path_enq_SOURCES = \
@@ -262,31 +305,71 @@ seqalt_fcd_SOURCES = \
         $(SEQALT_BASE_OBJS) \
         src/benchmark/std_glue/glue_fc_deque.cc
 
-bin_PROGRAMS += seqalt-ah
-seqalt_ah_SOURCES = \
-        $(SEQALT_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ah_queue.cc
-
 bin_PROGRAMS += seqalt-lcrq
 seqalt_lcrq_SOURCES = \
         $(SEQALT_BASE_OBJS) \
 				src/datastructures/lcrq_upstream.cc \
         src/benchmark/std_glue/glue_lcrq.cc
 
-bin_PROGRAMS += seqalt-tsstack
-seqalt_tsstack_SOURCES = \
+bin_PROGRAMS += seqalt-hc-ts-interval-stack
+seqalt_hc_ts_interval_stack_SOURCES = \
         $(SEQALT_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_stack.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_interval_stack.cc
 
-bin_PROGRAMS += seqalt-tsqueue
-seqalt_tsqueue_SOURCES = \
+bin_PROGRAMS += seqalt-hc-ts-interval-queue
+seqalt_hc_ts_interval_queue_SOURCES = \
         $(SEQALT_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_queue.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_interval_queue.cc
 
-bin_PROGRAMS += seqalt-tsdeque
-seqalt_tsdeque_SOURCES = \
+bin_PROGRAMS += seqalt-hc-ts-hardware-stack
+seqalt_hc_ts_hardware_stack_SOURCES = \
         $(SEQALT_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_deque.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_hardware_stack.cc
+
+bin_PROGRAMS += seqalt-hc-ts-hardware-queue
+seqalt_hc_ts_hardware_queue_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_hardcoded_ts_hardware_queue.cc
+
+bin_PROGRAMS += seqalt-ts-interval-stack
+seqalt_ts_interval_stack_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_stack.cc
+
+bin_PROGRAMS += seqalt-ts-interval-queue
+seqalt_ts_interval_queue_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_queue.cc
+
+bin_PROGRAMS += seqalt-ts-hardware-stack
+seqalt_ts_hardware_stack_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_stack.cc
+
+bin_PROGRAMS += seqalt-ts-hardware-queue
+seqalt_ts_hardware_queue_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_queue.cc
+
+bin_PROGRAMS += seqalt-ts-interval-deque
+seqalt_ts_interval_deque_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_deque.cc
+
+bin_PROGRAMS += seqalt-ts-hardware-deque
+seqalt_ts_hardware_deque_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_deque.cc
+
+bin_PROGRAMS += seqalt-ts-atomic-queue
+seqalt_ts_atomic_queue_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_atomic_queue.cc
+
+bin_PROGRAMS += seqalt-ts-stutter-queue
+seqalt_ts_stutter_queue_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_stutter_queue.cc
 
 bin_PROGRAMS += seqalt-enq
 seqalt_enq_SOURCES = \
@@ -397,31 +480,71 @@ prodcon_fcd_SOURCES = \
         $(PRODCON_BASE_OBJS) \
         src/benchmark/std_glue/glue_fc_deque.cc
 
-bin_PROGRAMS += prodcon-ah
-prodcon_ah_SOURCES = \
-        $(PRODCON_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ah_queue.cc
-
 bin_PROGRAMS += prodcon-lcrq
 prodcon_lcrq_SOURCES = \
         $(PRODCON_BASE_OBJS) \
 				src/datastructures/lcrq_upstream.cc \
         src/benchmark/std_glue/glue_lcrq.cc
 
-bin_PROGRAMS += prodcon-tsstack
-prodcon_tsstack_SOURCES = \
+bin_PROGRAMS += prodcon-hc-ts-interval-stack
+prodcon_hc_ts_interval_stack_SOURCES = \
         $(PRODCON_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_stack.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_interval_stack.cc
 
-bin_PROGRAMS += prodcon-tsqueue
-prodcon_tsqueue_SOURCES = \
+bin_PROGRAMS += prodcon-hc-ts-interval-queue
+prodcon_hc_ts_interval_queue_SOURCES = \
         $(PRODCON_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_queue.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_interval_queue.cc
 
-bin_PROGRAMS += prodcon-tsdeque
-prodcon_tsdeque_SOURCES = \
+bin_PROGRAMS += prodcon-hc-ts-hardware-stack
+prodcon_hc_ts_hardware_stack_SOURCES = \
         $(PRODCON_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_deque.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_hardware_stack.cc
+
+bin_PROGRAMS += prodcon-hc-ts-hardware-queue
+prodcon_hc_ts_hardware_queue_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_hardcoded_ts_hardware_queue.cc
+
+bin_PROGRAMS += prodcon-ts-interval-stack
+prodcon_ts_interval_stack_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_stack.cc
+
+bin_PROGRAMS += prodcon-ts-interval-queue
+prodcon_ts_interval_queue_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_queue.cc
+
+bin_PROGRAMS += prodcon-ts-hardware-stack
+prodcon_ts_hardware_stack_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_stack.cc
+
+bin_PROGRAMS += prodcon-ts-hardware-queue
+prodcon_ts_hardware_queue_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_queue.cc
+
+bin_PROGRAMS += prodcon-ts-interval-deque
+prodcon_ts_interval_deque_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_deque.cc
+
+bin_PROGRAMS += prodcon-ts-hardware-deque
+prodcon_ts_hardware_deque_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_deque.cc
+
+bin_PROGRAMS += prodcon-ts-atomic-queue
+prodcon_ts_atomic_queue_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_atomic_queue.cc
+
+bin_PROGRAMS += prodcon-ts-stutter-queue
+prodcon_ts_stutter_queue_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_stutter_queue.cc
 
 bin_PROGRAMS += prodcon-enq
 prodcon_enq_SOURCES = \
@@ -529,26 +652,71 @@ mandel_fcd_SOURCES = \
         $(MANDEL_BASE_OBJS) \
         src/benchmark/std_glue/glue_fc_deque.cc
 
-bin_PROGRAMS += mandel-ah
-mandel_ah_SOURCES = \
-        $(MANDEL_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ah_queue.cc
-
 bin_PROGRAMS += mandel-lcrq
 mandel_lcrq_SOURCES = \
         $(MANDEL_BASE_OBJS) \
 				src/datastructures/lcrq_upstream.cc \
         src/benchmark/std_glue/glue_lcrq.cc
 
-bin_PROGRAMS += mandel-tsstack
-mandel_tsstack_SOURCES = \
+bin_PROGRAMS += mandel-hc-ts-interval-stack
+mandel_hc_ts_interval_stack_SOURCES = \
         $(MANDEL_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_stack.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_interval_stack.cc
 
-bin_PROGRAMS += mandel-tsdeque
-mandel_tsdeque_SOURCES = \
+bin_PROGRAMS += mandel-hc-ts-interval-queue
+mandel_hc_ts_interval_queue_SOURCES = \
         $(MANDEL_BASE_OBJS) \
-        src/benchmark/std_glue/glue_ts_deque.cc
+        src/benchmark/std_glue/glue_hardcoded_ts_interval_queue.cc
+
+bin_PROGRAMS += mandel-hc-ts-hardware-stack
+mandel_hc_ts_hardware_stack_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_hardcoded_ts_hardware_stack.cc
+
+bin_PROGRAMS += mandel-hc-ts-hardware-queue
+mandel_hc_ts_hardware_queue_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_hardcoded_ts_hardware_queue.cc
+
+bin_PROGRAMS += mandel-ts-interval-stack
+mandel_ts_interval_stack_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_stack.cc
+
+bin_PROGRAMS += mandel-ts-interval-queue
+mandel_ts_interval_queue_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_queue.cc
+
+bin_PROGRAMS += mandel-ts-hardware-stack
+mandel_ts_hardware_stack_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_stack.cc
+
+bin_PROGRAMS += mandel-ts-hardware-queue
+mandel_ts_hardware_queue_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_queue.cc
+
+bin_PROGRAMS += mandel-ts-interval-deque
+mandel_ts_interval_deque_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_interval_deque.cc
+
+bin_PROGRAMS += mandel-ts-hardware-deque
+mandel_ts_hardware_deque_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_hardware_deque.cc
+
+bin_PROGRAMS += mandel-ts-atomic-queue
+mandel_ts_atomic_queue_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_atomic_queue.cc
+
+bin_PROGRAMS += mandel-ts-stutter-queue
+mandel_ts_stutter_queue_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_ts_stutter_queue.cc
 
 bin_PROGRAMS += mandel-enq
 mandel_enq_SOURCES = \

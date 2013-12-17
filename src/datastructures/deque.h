@@ -7,6 +7,7 @@
 
 #include "datastructures/pool.h"
 #include "datastructures/queue.h"
+#include "util/time.h"
 
 template<typename T>
 class Deque : public Queue<T> {
@@ -18,10 +19,16 @@ class Deque : public Queue<T> {
   virtual bool remove_right(T *item) = 0;
 
   virtual inline bool enqueue(T item) {
+    if(get_hwtime() % 2 ==1) {
+      return insert_left(item);
+    }
     return insert_right(item);
   }
 
   virtual inline bool dequeue(T *item) {
+    if(get_hwtime() % 2 ==1) {
+      return remove_left(item);
+    }
     return remove_right(item);
   }
 };
