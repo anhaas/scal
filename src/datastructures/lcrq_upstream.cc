@@ -754,8 +754,13 @@ bool lcrq_dequeue(uint64_t *item) {
                     if (CAS2((uint64_t*)cell, val, cell_idx, val, unsafe | h + RING_SIZE))
                         break;
                 } else if (t < h + 1 || r > 200000 || crq_closed) {
-                    if (CAS2((uint64_t*)cell, val, idx, val, h + RING_SIZE))
-                        break;
+
+                    if (CAS2((uint64_t*)cell, val, idx, val, h + RING_SIZE)) {
+                      if (r > 200000 && tt > RING_SIZE)
+                        BIT_TEST_AND_SET(&rq->tail, 63);
+                      break;
+                    }
+
                 } else {
                     ++r;
                 }
