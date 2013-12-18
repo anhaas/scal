@@ -2,6 +2,7 @@
 // Please see the AUTHORS file for details.  Use of this source code is governed
 // by a BSD license that can be found in the LICENSE file.
 
+#define __STDC_FORMAT_MACROS 1  // we want PRIu64 and friends
 #include <gflags/gflags.h>
 
 #include "benchmark/std_glue/std_pipe_api.h"

@@ -1,3 +1,7 @@
+// Copyright (c) 2012-2013, the Scal Project Authors.  All rights reserved.
+// Please see the AUTHORS file for details.  Use of this source code is governed
+// by a BSD license that can be found in the LICENSE file.
+
 #ifndef SCAL_DATASTRUCTURES_TS_STACK_H_
 #define SCAL_DATASTRUCTURES_TS_STACK_H_
 
@@ -5,7 +9,6 @@
 #include <atomic>
 
 #include "datastructures/stack.h"
-#include "util/time.h"
 #include "util/malloc.h"
 #include "util/platform.h"
 
@@ -50,6 +53,7 @@ class TSStack : public Stack<T> {
           return true;
         }
       }
+      // The stack was empty, return false.
       return false;
     }
 };

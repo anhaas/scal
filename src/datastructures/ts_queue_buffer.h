@@ -1,22 +1,22 @@
+// Copyright (c) 2012-2013, the Scal Project Authors.  All rights reserved.
+// Please see the AUTHORS file for details.  Use of this source code is governed
+// by a BSD license that can be found in the LICENSE file.
+
 #ifndef SCAL_DATASTRUCTURES_TS_QUEUE_BUFFER_H_
 #define SCAL_DATASTRUCTURES_TS_QUEUE_BUFFER_H_
 
+#define __STDC_FORMAT_MACROS 1  // we want PRIu64 and friends
 #define __STDC_LIMIT_MACROS
 #include <stdint.h>
 #include <assert.h>
 #include <atomic>
 #include <stdio.h>
 
-#include "datastructures/queue.h"
 #include "datastructures/ts_timestamp.h"
 #include "util/threadlocals.h"
-#include "util/time.h"
 #include "util/malloc.h"
 #include "util/platform.h"
 #include "util/random.h"
-
-#define BUFFERSIZE 1000000
-#define ABAOFFSET (1ul << 32)
 
 template<typename T, typename TimeStamp>
 class TSQueueBuffer {
@@ -27,22 +27,21 @@ class TSQueueBuffer {
       std::atomic<uint64_t> timestamp[2];
     } Item;
 
-    // The number of threads.
     uint64_t num_threads_;
     TimeStamp *timestamping_;
-    // The thread-local queues, implemented as arrays of size BUFFERSIZE. 
-    // At the moment buffer overflows are not considered.
     std::atomic<Item*> **insert_;
     std::atomic<Item*> **remove_;
-    // The pointers for the emptiness check.
     Item** *emptiness_check_pointers_;
 
+    // Helper function to remove the ABA counter from a pointer.
     inline void *get_aba_free_pointer(void *pointer) {
       uint64_t result = (uint64_t)pointer;
       result &= 0xfffffffffffffff8;
       return (void*)result;
     }
 
+    // Helper function which retrieves the ABA counter of the pointer old
+    // and sets this ABA counter + increment to the pointer pointer.
     inline void *add_next_aba(void *pointer, void *old, uint64_t increment) {
       uint64_t aba = (uint64_t)old;
       aba += increment;
@@ -53,10 +52,8 @@ class TSQueueBuffer {
     }
 
   public:
-    /////////////////////////////////////////////////////////////////
-    // Constructor
-    /////////////////////////////////////////////////////////////////
     void initialize(uint64_t num_threads, TimeStamp *timestamping) {
+
       num_threads_ = num_threads;
       timestamping_ = timestamping;
 
@@ -124,33 +121,31 @@ class TSQueueBuffer {
       return strncpy(newbuf, buffer, strlen(buffer));
     }
 
-    /////////////////////////////////////////////////////////////////
-    // insert_right
-    /////////////////////////////////////////////////////////////////
-    inline std::atomic<uint64_t> *insert_right(T element) {
+    inline std::atomic<uint64_t> *insert_left(T element) {
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
 
+      // Create a new item.
       Item *new_item = scal::tlget_aligned<Item>(scal::kCachePrefetch);
       timestamping_->init_top_atomic(new_item->timestamp);
       new_item->data.store(element);
       new_item->next.store(NULL);
 
+      // Add the item to the thread-local list.
       Item* old_insert = insert_[thread_id]->load();
       old_insert->next.store(new_item);
       insert_[thread_id]->store(new_item);
+
+      //Return a pointer to the timestamp location of the item so that
+      // a timestamp can be assigned.
       return new_item->timestamp;
     };
 
-    /////////////////////////////////////////////////////////////////
-    // insert_right
-    /////////////////////////////////////////////////////////////////
-    inline std::atomic<uint64_t> *insert_left(T element) {
-      return insert_right(element);
+    inline std::atomic<uint64_t> *insert_right(T element) {
+      // No explicit insert_right operation is provided, add the element
+      // at the left side instead.
+      return insert_left(element);
     }
 
-    /////////////////////////////////////////////////////////////////
-    // try_remove_right
-    /////////////////////////////////////////////////////////////////
     bool try_remove_right(T *element, uint64_t *invocation_time) {
       // Initialize the data needed for the emptiness check.
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
@@ -160,29 +155,32 @@ class TSQueueBuffer {
       // Initialize the result pointer to NULL, which means that no 
       // element has been removed.
       Item *result = NULL;
-      // Indicates the index which contains the oldest item.
+      // Indicates the index of the buffer which contains the oldest item.
       uint64_t buffer_index = -1;
-      // Stores the time stamp of the oldest item found until now.
+      // Memory on the stack frame where timestamps of items can be stored
+      // temporarily.
       uint64_t tmp_timestamp[2][2];
+      // Index in the tmp_timestamp array where no timestamp is stored at the
+      // moment.
       uint64_t tmp_index = 1;
       timestamping_->init_top(tmp_timestamp[0]);
+      // Pointer to the earliest timestamp found until now.
       uint64_t *timestamp = tmp_timestamp[0];
       // Stores the value of the remove pointer of a thead-local buffer 
       // before the buffer is actually accessed.
       Item* old_remove = NULL;
 
+      // Read the start time of the iteration. Items which were timestamped
+      // after the start time do not get removed.
       uint64_t start_time[2];
       timestamping_->read_time(start_time);
+      // We start iterating of the thread-local lists at a random index.
       uint64_t start = hwrand();
       // We iterate over all thead-local buffers
       for (uint64_t i = 0; i < num_threads_; i++) {
-//      for (uint64_t i = 0; i < num_threads_ / 2 + 1; i++) {
 
-//        uint64_t tmp_buffer_index = (start + i) % (num_threads_ / 2 + 1);
         uint64_t tmp_buffer_index = (start + i) % num_threads_;
-        if (tmp_buffer_index == 0) {
-          continue;
-        }
+
         // We get the remove/insert pointer of the current thread-local 
         // buffer.
         Item* tmp_remove = remove_[tmp_buffer_index]->load();
@@ -200,7 +198,6 @@ class TSQueueBuffer {
           item_timestamp = tmp_timestamp[tmp_index];
 
           if (timestamping_->is_later(timestamp, item_timestamp)) {
-//          if (t1 < item_t1) {
             // We found a new oldest element, so we remember it.
             result = item;
             buffer_index = tmp_buffer_index;
@@ -233,10 +230,9 @@ class TSQueueBuffer {
       return !empty;
     }
 
-    /////////////////////////////////////////////////////////////////
-    // try_remove_left
-    /////////////////////////////////////////////////////////////////
     bool try_remove_left(T *element, uint64_t *invocation_time) {
+      // No explicit try_remove_left operation is provided, the element
+      // is removed at the right side instead.
       return try_remove_right(element, invocation_time);
     }
 };

@@ -1,3 +1,7 @@
+// Copyright (c) 2012-2013, the Scal Project Authors.  All rights reserved.
+// Please see the AUTHORS file for details.  Use of this source code is governed
+// by a BSD license that can be found in the LICENSE file.
+
 #ifndef SCAL_DATASTRUCTURES_TS_QUEUE_H_
 #define SCAL_DATASTRUCTURES_TS_QUEUE_H_
 
@@ -34,19 +38,27 @@ class TSQueue : public Queue<T> {
 
     bool enqueue(T element) {
       std::atomic<uint64_t> *item = buffer_->insert_left(element);
+      // In the set_timestamp operation first a new timestamp is acquired
+      // and then assigned to the item. The operation may not be executed
+      // atomically.
       timestamping_->set_timestamp(item);
       return true;
     }
 
     bool dequeue(T *element) {
       uint64_t invocation_time[2];
-      timestamping_->read_time(invocation_time);
+      // The invocation time of this operation is only needed for the
+      // elimination optimization, which is not possible for a queue.
+      // Therefore we do not read the time to set the invocation time
+      // but initialize it with TOP.
+      timestamping_->init_top(invocation_time);
       while (buffer_->try_remove_right(element, invocation_time)) {
 
         if (*element != (T)NULL) {
           return true;
         }
       }
+      // The queue was empty, return false.
       return false;
     }
 };

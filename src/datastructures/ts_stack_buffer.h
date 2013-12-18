@@ -1,3 +1,7 @@
+// Copyright (c) 2012-2013, the Scal Project Authors.  All rights reserved.
+// Please see the AUTHORS file for details.  Use of this source code is governed
+// by a BSD license that can be found in the LICENSE file.
+
 #ifndef SCAL_DATASTRUCTURES_TS_STACK_BUFFER_H_
 #define SCAL_DATASTRUCTURES_TS_STACK_BUFFER_H_
 
@@ -8,23 +12,13 @@
 #include <atomic>
 #include <stdio.h>
 
-#include "datastructures/pool.h"
-#include "datastructures/ts_timestamp.h"
 #include "util/threadlocals.h"
-#include "util/time.h"
+#include "util/random.h"
 #include "util/malloc.h"
 #include "util/platform.h"
-#include "util/random.h"
-#include "util/workloads.h"
 
-#define BUFFERSIZE 1000000
-#define ABAOFFSET (1ul << 32)
-
-//////////////////////////////////////////////////////////////////////
-// A TSStackBuffer based on thread-local linked lists.
-//////////////////////////////////////////////////////////////////////
 template<typename T, typename Timestamp>
-class TSStackBuffer : Pool<T> {
+class TSStackBuffer {
   private:
     typedef struct Item {
       std::atomic<Item*> next;
@@ -33,23 +27,23 @@ class TSStackBuffer : Pool<T> {
       std::atomic<uint64_t> timestamp[2];
     } Item;
 
-    // The number of threads.
     uint64_t num_threads_;
-    // The thread-local queues, implemented as arrays of size BUFFERSIZE. 
-    // At the moment buffer overflows are not considered.
+
     std::atomic<Item*> **buckets_;
-    // The pointers for the emptiness check.
     Item** *emptiness_check_pointers_;
+    Timestamp *timestamping_;
     uint64_t* *counter1_;
     uint64_t* *counter2_;
-    Timestamp *timestamping_;
 
+    // Helper function to remove the ABA counter from a pointer. 
     inline void *get_aba_free_pointer(void *pointer) {
       uint64_t result = (uint64_t)pointer;
       result &= 0xfffffffffffffff8;
       return (void*)result;
     }
 
+    // Helper function which retrieves the ABA counter of the pointer old
+    // and sets this ABA counter + increment to the pointer pointer.
     inline void *add_next_aba(void *pointer, void *old, uint64_t increment) {
       uint64_t aba = (uint64_t)old;
       aba += increment;
@@ -59,7 +53,7 @@ class TSStackBuffer : Pool<T> {
       return (void*)((result & 0xffffffffffffff8) | aba);
     }
 
-    // Returns the oldest not-taken item from the thread-local queue 
+    // Returns the oldest not-taken item from the thread-local list 
     // indicated by thread_id.
     inline Item* get_youngest_item(uint64_t thread_id) {
 
@@ -79,7 +73,9 @@ class TSStackBuffer : Pool<T> {
     }
 
   public:
+
     void initialize(uint64_t num_threads, Timestamp *timestamping) {
+
       num_threads_ = num_threads;
       timestamping_ = timestamping; 
 
@@ -99,10 +95,10 @@ class TSStackBuffer : Pool<T> {
         // Add a sentinal node.
         Item *new_item = scal::get<Item>(scal::kCachePrefetch * 4);
         timestamping_->init_sentinel_atomic(new_item->timestamp);
-        new_item->data.store(0, std::memory_order_release);
-        new_item->taken.store(1, std::memory_order_release);
+        new_item->data.store(0);
+        new_item->taken.store(1);
         new_item->next.store(new_item);
-        buckets_[i]->store(new_item, std::memory_order_release);
+        buckets_[i]->store(new_item);
 
         emptiness_check_pointers_[i] = static_cast<Item**> (
             scal::calloc_aligned(num_threads_, sizeof(Item*), 
@@ -144,17 +140,11 @@ class TSStackBuffer : Pool<T> {
         sum2 += *counter2_[i];
       }
 
-      double avg1 = sum1;
-      avg1 /= (double)40000000.0;
-
-      double avg2 = sum2;
-      avg2 /= (double)40000000.0;
-
       char buffer[255] = { 0 };
       uint32_t n = snprintf(buffer,
                             sizeof(buffer),
-                            ";c1: %.2f ;c2: %.2f",
-                            avg1, avg2);
+                            ";c1: %lu ;c2: %lu",
+                            sum1, sum2);
       if (n != strlen(buffer)) {
         fprintf(stderr, "%s: error creating stats string\n", __func__);
         abort();
@@ -164,37 +154,39 @@ class TSStackBuffer : Pool<T> {
       return strncpy(newbuf, buffer, strlen(buffer));
     }
 
-    /////////////////////////////////////////////////////////////////
-    // insert_right
-    /////////////////////////////////////////////////////////////////
     inline std::atomic<uint64_t> *insert_right(T element) {
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
 
+      // Allocate a new item.
       Item *new_item = scal::tlget_aligned<Item>(scal::kCachePrefetch);
       timestamping_->init_top_atomic(new_item->timestamp);
-      new_item->data.store(element, std::memory_order_release);
-      new_item->taken.store(0, std::memory_order_release);
+      new_item->data.store(element);
+      new_item->taken.store(0);
 
-      Item* old_top = buckets_[thread_id]->load(std::memory_order_acquire);
+      Item* old_top = buckets_[thread_id]->load();
 
+      // Find the topmost item in the thread-local list which has not been
+      // removed logically yet.
       Item* top = (Item*)get_aba_free_pointer(old_top);
       while (top->next.load() != top 
-          && top->taken.load(std::memory_order_acquire)) {
+          && top->taken.load()) {
         top = top->next.load();
       }
 
+      // Add the new item to the thread-local list.
       new_item->next.store(top);
       buckets_[thread_id]->store(
           (Item*) add_next_aba(new_item, old_top, 1), 
           std::memory_order_release);
 
+      // Return a pointer to the timestamp location of the item so that
+      // a timestamp can be added.
       return new_item->timestamp;
     };
 
-    /////////////////////////////////////////////////////////////////
-    // insert_left
-    /////////////////////////////////////////////////////////////////
     inline std::atomic<uint64_t> *insert_left(T element) {
+      // No explicit insert_left operation is provided, add the element
+      // at the right side instead.
       return insert_right(element);
     }
 
@@ -208,27 +200,31 @@ class TSStackBuffer : Pool<T> {
         emptiness_check_pointers_[thread_id];
       bool empty = true;
       // Initialize the result pointer to NULL, which means that no 
-      // element has been removed.
+      // element has been found yet.
       Item *result = NULL;
-      // Indicates the index which contains the youngest item.
+      // Indicates the index of the buffer which contains the youngest item.
       uint64_t buffer_index = -1;
-      // Stores the time stamp of the youngest item found until now.
+      // Memory on the stack frame where timestamps of items can be stored 
+      // temporarily.
       uint64_t tmp_timestamp[2][2];
+      // Index in the tmp_timestamp array which is not used at the moment.
       uint64_t tmp_index = 1;
       timestamping_->init_sentinel(tmp_timestamp[0]);
+      // timestamp stores a pointer to the timestamp of the item with the
+      // latest timestamp. 
       uint64_t *timestamp = tmp_timestamp[0];
       // Stores the value of the remove pointer of a thead-local buffer 
       // before the buffer is actually accessed.
       Item* old_top = NULL;
 
+      // We start iterating over the thread-local lists at a random index.
       uint64_t start = hwrand();
       // We iterate over all thead-local buffers
-      for (uint64_t i = 0; i < num_threads_ / 2 + 1; i++) {
-//      for (uint64_t i = 0; i < num_threads_; i++) {
+      for (uint64_t i = 0; i < num_threads_; i++) {
         inc_counter1(1);
 
-        uint64_t tmp_buffer_index = (start + i) % (num_threads_/2 + 1);
-//        uint64_t tmp_buffer_index = (start + i) % (num_threads_);
+        // The index of the current buffer.
+        uint64_t tmp_buffer_index = (start + i) % (num_threads_);
         // We get the remove/insert pointer of the current thread-local buffer.
         Item* tmp_top = buckets_[tmp_buffer_index]->load();
         // We get the youngest element from that thread-local buffer.
@@ -236,6 +232,7 @@ class TSStackBuffer : Pool<T> {
         // If we found an element, we compare it to the youngest element 
         // we have found until now.
         if (item != NULL) {
+          // We found an element, so the buffer is not empty.
           empty = false;
           uint64_t *item_timestamp;
           timestamping_->load_timestamp(tmp_timestamp[tmp_index], item->timestamp);
@@ -244,6 +241,7 @@ class TSStackBuffer : Pool<T> {
           // Check if we can remove the element immediately.
           if (!timestamping_->is_later(invocation_time, item_timestamp)) {
             uint64_t expected = 0;
+            // We try to set the taken flag and thereby logically remove the item.
             if (item->taken.compare_exchange_weak(
                     expected, 1, 
                     std::memory_order_acq_rel, std::memory_order_relaxed)) {
@@ -253,6 +251,7 @@ class TSStackBuffer : Pool<T> {
                   tmp_top, (Item*)add_next_aba(item, tmp_top, 0), 
                   std::memory_order_acq_rel, std::memory_order_relaxed);
 
+              // The item has been removed. 
               *element = item->data.load(std::memory_order_acquire);
               return true;
             } else {
@@ -288,7 +287,7 @@ class TSStackBuffer : Pool<T> {
       }
       if (result != NULL) {
         // We found a youngest element which is not younger than the 
-        // threshold. We try to remove it.
+        // invocation time. We try to remove it.
         uint64_t expected = 0;
         if (result->taken.load() == 0) {
           if (result->taken.compare_exchange_weak(expected, 1)) {
@@ -310,31 +309,10 @@ class TSStackBuffer : Pool<T> {
       return !empty;
     }
 
-    /////////////////////////////////////////////////////////////////
-    // try_remove_right
-    /////////////////////////////////////////////////////////////////
     inline bool try_remove_left(T *element, uint64_t *invocation_time) {
+      // No explicit try_remove_left operation is provided, the element is
+      // removed at the right side instead.
       return try_remove_right(element, invocation_time);
-    }
-
-    inline bool put(T element) {
-      std::atomic<uint64_t> *item = insert_right(element);
-      timestamping_->set_timestamp(item);
-      return true;
-    }
-
-    inline bool get(T *element) {
-      // Read the invocation time of this operation, needed for the
-      // elimination optimization.
-      uint64_t invocation_time[2];
-      timestamping_->read_time(invocation_time);
-      while (try_remove_right(element, invocation_time)) {
-
-        if (*element != (T)NULL) {
-          return true;
-        }
-      }
-      return false;
     }
 };
 

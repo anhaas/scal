@@ -1,3 +1,7 @@
+// Copyright (c) 2012-2013, the Scal Project Authors.  All rights reserved.
+// Please see the AUTHORS file for details.  Use of this source code is governed
+// by a BSD license that can be found in the LICENSE file.
+
 #ifndef SCAL_DATASTRUCTURES_TS_DEQUE_BUFFER_H_
 #define SCAL_DATASTRUCTURES_TS_DEQUE_BUFFER_H_
 
@@ -6,23 +10,12 @@
 #include <assert.h>
 #include <atomic>
 #include <stdio.h>
-#include <time.h>
 
-#include "datastructures/deque.h"
-#include "datastructures/ts_timestamp.h"
 #include "util/threadlocals.h"
-#include "util/time.h"
+#include "util/random.h"
 #include "util/malloc.h"
 #include "util/platform.h"
-#include "util/random.h"
-#include "util/workloads.h"
 
-#define BUFFERSIZE 1000000
-#define ABAOFFSET (1ul << 32)
-
-//////////////////////////////////////////////////////////////////////
-// A TSDequeBuffer based on thread-local linked lists.
-//////////////////////////////////////////////////////////////////////
 template<typename T, typename TimeStamp>
 class TSDequeBuffer { 
   private:
@@ -48,12 +41,15 @@ class TSDequeBuffer {
     Item** *emptiness_check_right_;
     TimeStamp *timestamping_;
 
+    // Helper function to remove the ABA counter from a pointer.
     void *get_aba_free_pointer(void *pointer) {
       uint64_t result = (uint64_t)pointer;
       result &= 0xfffffffffffffff8;
       return (void*)result;
     }
 
+    // Helper function which retrieves the ABA counter of a pointer old
+    // and sets this ABA counter + increment to the pointer pointer.
     void *add_next_aba(void *pointer, void *old, uint64_t increment) {
       uint64_t aba = (uint64_t)old;
       aba += increment;
@@ -63,15 +59,17 @@ class TSDequeBuffer {
       return (void*)((result & 0xffffffffffffff8) | aba);
     }
 
-    // Returns the oldest not-taken item from the thread-local queue 
+    // Returns the leftmost not-taken item from the thread-local list 
     // indicated by thread_id.
     Item* get_left_item(uint64_t thread_id) {
 
+      // Read the item pointed to by the right pointer. The iteration through
+      // the linked list can stop at that item.
       Item* old_right = right_[thread_id]->load();
       Item* right = (Item*)get_aba_free_pointer(old_right);
-
       int64_t threshold = right->index.load();
 
+      // Read the leftmost item.
       Item* result = (Item*)get_aba_free_pointer(left_[thread_id]->load());
 
       // We start at the left pointer and iterate to the right until we
@@ -96,15 +94,17 @@ class TSDequeBuffer {
       }
     }
 
+    // Returns the rightmost not-taken item from the thread-local list
+    // indicated by thread_id.
     Item* get_right_item(uint64_t thread_id) {
 
+      // Read the item pointed to by the left pointer. The iteration through
+      // the linked list can stop at that item.
       Item* old_left = left_[thread_id]->load();
       Item* left = (Item*)get_aba_free_pointer(old_left);
-
       int64_t threshold = left->index.load();
 
-      Item* result = (Item*)get_aba_free_pointer(
-        right_[thread_id]->load());
+      Item* result = (Item*)get_aba_free_pointer(right_[thread_id]->load());
 
       // We start at the right pointer and iterate to the left until we
       // find the first item which has not been taken yet.
@@ -129,10 +129,9 @@ class TSDequeBuffer {
     }
 
   public:
-    /////////////////////////////////////////////////////////////////
-    // Constructor
-    /////////////////////////////////////////////////////////////////
+
     void initialize(uint64_t num_threads, TimeStamp *timestamping) {
+
       num_threads_ = num_threads;
       timestamping_ = timestamping;
 
@@ -193,21 +192,23 @@ class TSDequeBuffer {
       return NULL;
     }
 
-    /////////////////////////////////////////////////////////////////
-    // insert_left
-    /////////////////////////////////////////////////////////////////
     inline std::atomic<uint64_t> *insert_left(T element) {
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
 
+      // Create a new item.
       Item *new_item = scal::tlget_aligned<Item>(scal::kCachePrefetch);
-      // Switch the sign of the time stamp of elements inserted at the
-      // left side.
       timestamping_->init_top_atomic(new_item->timestamp);
       new_item->data.store(element);
       new_item->taken.store(0);
       new_item->left.store(new_item);
+      // Items inserted at the left get negative indices. Thereby the
+      // order of items in the thread-local lists correspond with the
+      // order of indices, and we can use the sign of the index to
+      // determine on which side an item has been inserted.
       new_item->index = -((*next_index_[thread_id])++);
 
+      // Determine leftmost not-taken item in the list. The new item is
+      // inserted to the left of that item.
       Item* old_left = left_[thread_id]->load();
 
       Item* left = (Item*)get_aba_free_pointer(old_left);
@@ -225,11 +226,14 @@ class TSDequeBuffer {
         right_[thread_id]->store((Item*) add_next_aba(left, old_right, 1));
       }
 
+      // Add the new item to the list.
       new_item->right.store(left);
       left->left.store(new_item);
       left_[thread_id]->store(
         (Item*) add_next_aba(new_item, old_left, 1));
  
+      // Return a pointer to the timestamp location of the item so that a
+      // timestamp can be added.
       return new_item->timestamp;
     }
 
@@ -239,6 +243,7 @@ class TSDequeBuffer {
     inline std::atomic<uint64_t> *insert_right(T element) {
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
 
+      // Create a new item.
       Item *new_item = scal::tlget_aligned<Item>(scal::kCachePrefetch);
       timestamping_->init_top_atomic(new_item->timestamp);
       new_item->data.store(element);
@@ -246,6 +251,8 @@ class TSDequeBuffer {
       new_item->right.store(new_item);
       new_item->index = (*next_index_[thread_id])++;
 
+      // Determine the rightmost not-taken item in the list. The new item is
+      // inserted to the right of that item.
       Item* old_right = right_[thread_id]->load();
 
       Item* right = (Item*)get_aba_free_pointer(old_right);
@@ -262,21 +269,27 @@ class TSDequeBuffer {
         Item* old_left = left_[thread_id]->load();
         left_[thread_id]->store( (Item*) add_next_aba(right, old_left, 1)); }
 
+      // Add the new item to the list.
       new_item->left.store(right);
       right->right.store(new_item);
       right_[thread_id]->store((Item*) add_next_aba(new_item, old_right, 1));
 
+      // Return a pointer to the timestamp location of the item so that a
+      // timestamp can be added.
       return new_item->timestamp;
     }
 
+    // Helper function which returns true if the item was inserted at the left.
     inline bool inserted_left(Item *item) {
       return item->index.load() < 0;
     }
 
+    // Helper function which returns true if the item was inserted at the right.
     inline bool inserted_right(Item *item) {
       return item->index.load() > 0;
     }
 
+    // Helper function which returns true if item1 is more left than item2.
     inline bool is_more_left(Item *item1, uint64_t *timestamp1, Item *item2, uint64_t *timestamp2) {
       if (inserted_left(item2)) {
         if (inserted_left(item1)) {
@@ -293,6 +306,7 @@ class TSDequeBuffer {
       }
     }
 
+    // Helper function which returns true if item1 is more right than item2.
     inline bool is_more_right(Item *item1, uint64_t *timestamp1, Item *item2, uint64_t *timestamp2) {
       if (inserted_right(item2)) {
         if (inserted_right(item1)) {
@@ -309,11 +323,7 @@ class TSDequeBuffer {
       }
     }
 
-    /////////////////////////////////////////////////////////////////
-    // try_remove_left
-    /////////////////////////////////////////////////////////////////
-    bool try_remove_left
-      (T *element, uint64_t *invocation_time) {
+    bool try_remove_left(T *element, uint64_t *invocation_time) {
       // Initialize the data needed for the emptiness check.
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
       Item* *emptiness_check_left = 
@@ -326,8 +336,10 @@ class TSDequeBuffer {
       Item *result = NULL;
       // Indicates the index which contains the youngest item.
       uint64_t buffer_index = -1;
-      // Stores the time stamp of the left-most item found until now.
+      // Memory on the stack frame where timestamps of items can be stored
+      // temporarily.
       uint64_t tmp_timestamp[2][2];
+      // Index in the tmp_timestamp array which is not used at the moment.
       uint64_t tmp_index = 1;
       timestamping_->init_sentinel(tmp_timestamp[0]);
       uint64_t *timestamp = tmp_timestamp[0];
@@ -335,13 +347,16 @@ class TSDequeBuffer {
       // before the buffer is actually accessed.
       Item* old_left = NULL;
 
+      // Read the start time of the iteration. Items which were timestamped
+      // after the start time and inserted at the right are not removed.
       uint64_t start_time[2];
       timestamping_->read_time(start_time);
+      // We start iterating over the thread-local lists at a random index.
       uint64_t start = hwrand();
       // We iterate over all thead-local buffers
-      for (uint64_t i = 0; i < num_threads_ / 2 +1; i++) {
+      for (uint64_t i = 0; i < num_threads_; i++) {
 
-        uint64_t tmp_buffer_index = (start + i) % (num_threads_/ 2 + 1);
+        uint64_t tmp_buffer_index = (start + i) % num_threads_;
         // We get the remove/insert pointer of the current thread-local buffer.
         Item* tmp_left = left_[tmp_buffer_index]->load();
         // We get the youngest element from that thread-local buffer.
@@ -355,7 +370,7 @@ class TSDequeBuffer {
           item_timestamp = tmp_timestamp[tmp_index];
           
           if (result == NULL || is_more_left(item, item_timestamp, result, timestamp)) {
-            // We found a new youngest element, so we remember it.
+            // We found a new leftmost item, so we remember it.
             result = item;
             buffer_index = tmp_buffer_index;
             timestamp = item_timestamp;
@@ -398,6 +413,8 @@ class TSDequeBuffer {
       }
       if (result != NULL) {
         if (!timestamping_->is_later(timestamp, start_time)) {
+          // The found item was timestamped after the start of the iteration,
+          // so it is save to remove it.
           uint64_t expected = 0;
           if (result->taken.load() == 0) {
             if (result->taken.compare_exchange_weak(
@@ -417,11 +434,7 @@ class TSDequeBuffer {
       return !empty;
     }
 
-    /////////////////////////////////////////////////////////////////
-    // try_remove_right
-    ////////////////////////////////////////////////////////////////
-    bool try_remove_right
-      (T *element, uint64_t *invocation_time) {
+    bool try_remove_right(T *element, uint64_t *invocation_time) {
       // Initialize the data needed for the emptiness check.
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
       Item* *emptiness_check_left = 
@@ -434,8 +447,10 @@ class TSDequeBuffer {
       Item *result = NULL;
       // Indicates the index which contains the youngest item.
       uint64_t buffer_index = -1;
-      // Stores the time stamp of the right-most item found until now.
+      // Memory on the stack frame where timestamps of items can be stored
+      // temporarily.
       uint64_t tmp_timestamp[2][2];
+      // Index in the tmp_timestamp array whihc is not used at the moment.
       uint64_t tmp_index = 1;
       timestamping_->init_sentinel(tmp_timestamp[0]);
       uint64_t *timestamp = tmp_timestamp[0];
@@ -443,8 +458,11 @@ class TSDequeBuffer {
       // before the buffer is actually accessed.
       Item* old_right = NULL;
 
+      // Read the start time of the iteration. Items which were timestamped
+      // after the start time and inserted at the left are not removed.
       uint64_t start_time[2];
       timestamping_->read_time(start_time);
+      // We start iterating over the thread-local lists at a random index.
       uint64_t start = hwrand();
       // We iterate over all thead-local buffers
       for (uint64_t i = 0; i < num_threads_; i++) {
@@ -507,6 +525,8 @@ class TSDequeBuffer {
       }
       if (result != NULL) {
         if (!timestamping_->is_later(timestamp, start_time)) {
+          // The found item was timestamped after the start of the iteration,
+          // so it is save to remove it.
           uint64_t expected = 0;
           if (result->taken.load() == 0) {
             if (result->taken.compare_exchange_weak(

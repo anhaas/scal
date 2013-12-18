@@ -1,3 +1,7 @@
+// Copyright (c) 2012-2013, the Scal Project Authors.  All rights reserved.
+// Please see the AUTHORS file for details.  Use of this source code is governed
+// by a BSD license that can be found in the LICENSE file.
+
 #ifndef SCAL_DATASTRUCTURES_TS_DEQUE_H_
 #define SCAL_DATASTRUCTURES_TS_DEQUE_H_
 
@@ -6,9 +10,9 @@
 
 #include "datastructures/pool.h"
 #include "datastructures/deque.h"
-#include "util/time.h"
 #include "util/malloc.h"
 #include "util/platform.h"
+#include "util/random.h"
 
 template<typename T, typename TSBuffer, typename Timestamp>
 class TSDeque : public Deque<T> {
@@ -35,35 +39,41 @@ class TSDeque : public Deque<T> {
     }
 
     bool put(T element) {
-      if ((get_hwtime() % 2) == 0) {
+      // Randomly insert an element either at the left or the right side
+      // of the deque.
+      if ((hwrand() % 2) == 0) {
         return insert_left(element);
       }
       return insert_right(element);
     }
 
     bool get(T *element) {
-      if ((get_hwtime() % 2) == 0) {
+      // Randomly remove an element either at the left or the right side
+      // of the deque.
+      if ((hwrand() % 2) == 0) {
         return remove_left(element);
       }
       return remove_right(element);
     }
 
-    // Inserts the element at the left side of the deque.
     bool insert_left(T element) {
       std::atomic<uint64_t> *item = buffer_->insert_left(element);
+      // In the set_timestamp operation first a new timestamp is acquired
+      // and then assigned to the item. The operation may not be executed
+      // atomically.
       timestamping_->set_timestamp(item);
       return true;
     }
 
-    // Inserts the element at the right side of the deque.
     bool insert_right(T element) {
       std::atomic<uint64_t> *item = buffer_->insert_right(element);
+      // In the set_timestamp operation first a new timestamp is acquired
+      // and then assigned to the item. The operation may not be executed
+      // atomically.
       timestamping_->set_timestamp(item);
       return true;
     }
 
-    // Removes the leftmost element from the deque and returns true
-    // or returns false if the deque is empty.
     bool remove_left(T *element) {
       // Read the invocation time of this operation, needed for the
       // elimination optimization.
@@ -75,11 +85,10 @@ class TSDeque : public Deque<T> {
           return true;
         }
       }
+      // The deque was empty, return false.
       return false;
     }
 
-    // Removes the leftmost element from the deque and returns true
-    // or returns false if the deque is empty.
     bool remove_right(T *element) {
       // Read the invocation time of this operation, needed for the
       // elimination optimization.
@@ -91,6 +100,7 @@ class TSDeque : public Deque<T> {
           return true;
         }
       }
+      // The deque was empty, return false.
       return false;
     }
 };
