@@ -156,6 +156,21 @@ int main(int argc, const char **argv) {
           (static_cast<double>(max_consumer_time) / 1000));
     }
 
+    uint64_t num_operations;
+    
+    if (FLAGS_barrier) {
+      // We only measure the time needed for the all consuming operations
+      // which is the same as the number of all produced elements.
+      num_operations = FLAGS_operations * FLAGS_producers;
+    } else if (FLAGS_consumers == 0) {
+      // We measure the time needed of all producer operations.
+      num_operations = FLAGS_operations * FLAGS_producers;
+    } else {
+      // Each element produced is also consumed. Therefore the number of
+      // operations is two times the number of elements produced.
+      num_operations = FLAGS_operations * FLAGS_producers * 2;
+    }
+
     uint32_t n = snprintf(buffer, sizeof(buffer), 
         "threads: %" PRIu64 " ;producers: %" PRIu64 " consumers: %" PRIu64 " ;runtime: %" PRIu64 " ;operations: %" PRIu64 " ;c: %" PRIu64 " ;aggr: %" PRIu64 " ;enough_inserting: %" PRIu64 " ;consumer_aggr: %" PRIu64 " ;ds_stats: ",
         g_num_threads,
@@ -165,7 +180,7 @@ int main(int argc, const char **argv) {
         FLAGS_operations,
         FLAGS_c,
         // TODO Change the calculation.
-        (uint64_t)((FLAGS_operations * FLAGS_producers * 2) / (static_cast<double>(exec_time) / 1000)),
+        (uint64_t)(num_operations / (static_cast<double>(exec_time) / 1000)),
         enough_inserting,
         measure_at_aggr);
     if (n != strlen(buffer)) {
