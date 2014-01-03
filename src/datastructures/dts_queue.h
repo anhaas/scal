@@ -190,10 +190,11 @@ class DTSQueue : Queue<T>{
       // We start iterating of the thread-local lists at a random index.
       uint64_t start = hwrand();
       // We iterate over all thead-local buffers
-      for (uint64_t i = 0; i < num_threads_; i++) {
+      uint64_t num_buffers = (num_threads_ / 2) + 1;
+      for (uint64_t i = 0; i < num_buffers; i++) {
         inc_counter2(1);
 
-        uint64_t tmp_buffer_index = (start + i) % (num_threads_);
+        uint64_t tmp_buffer_index = (start + i) % (num_buffers);
 
         // We get the remove/insert pointer of the current thread-local 
         // buffer.
@@ -268,12 +269,12 @@ class DTSQueue : Queue<T>{
 
     inline bool dequeue(T *element) {
       uint64_t dequeue_timestamp[2];
-      if (hwrand() % 2 <= 2) {
-        dequeue_timestamp[0] = UINT64_MAX;
-      } else {
+   //   if (hwrand() % 2 >= 2) {
+   //     dequeue_timestamp[0] = UINT64_MAX;
+   //   } else {
         dequeue_timestamping_->set_timestamp_local(dequeue_timestamp);
-        dequeue_timestamp[0] += 80;
-      }
+   //     dequeue_timestamp[0] += 80;
+   //   }
       while (try_remove_oldest(element, dequeue_timestamp)) {
 
         if (*element != (T)NULL) {
