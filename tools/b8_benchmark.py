@@ -28,7 +28,9 @@ if not os.path.exists(outputDir):
 
 #queues = ah_config.allQueues
 queues = [
-              'ebstack'
+              'ms'
+              , 'dts-queue'
+              , 'hc-ts-hardware-queue'
              ]
 works = [250, 2000]
 maxThreads = ah_config.maxThreadsB8

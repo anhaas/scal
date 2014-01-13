@@ -44,7 +44,8 @@ allQueues = [ 'bskfifo'
              , 'tsdequeqhw' 
              , 'tsdequeqhw2ts' 
              , 'tsdequeqstutter2ts' 
-             , 'tsdequeqatomic2ts' 
+             , 'tsdequeqatomic2ts'
+             , 'dts-queue'
              ]
 
 executables = { 
