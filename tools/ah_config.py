@@ -16,35 +16,18 @@ allQueues = [ 'bskfifo'
              , 'tstack'
              , 'uskfifo'
              , 'wf'
-             , 'tsstutterlist' 
-             , 'tsstutterarray'
-             , 'tsatomiclist'  
-             , 'tsatomicarray' 
-             , 'tshwlist'      
-             , 'tshwarray'     
-             , 'tshw2ts'     
-             , 'tsatomic2ts'     
-             , 'tsstutter2ts'     
-             , 'tsqueuestutter' 
-             , 'tsqueueatomic' 
-             , 'tsqueuehw' 
-             , 'tsqueue2ts' 
-             , 'tsqueueatomic2ts' 
-             , 'tsqueuestutter2ts' 
-             , 'tsdequestutter' 
-             , 'tsdequeatomic' 
-             , 'tsdequehw' 
-             , 'tsdequehw2ts' 
-             , 'tsdequeatomic2ts' 
-             , 'tsdequestutter2ts' 
-             , 'tsdequeshw' 
-             , 'tsdequeshw2ts' 
-             , 'tsdequesatomic2ts' 
-             , 'tsdequesstutter2ts' 
-             , 'tsdequeqhw' 
-             , 'tsdequeqhw2ts' 
-             , 'tsdequeqstutter2ts' 
-             , 'tsdequeqatomic2ts' 
+             , 'hc-ts-hardware-queue'
+             , 'hc-ts-hardware-stack'
+             , 'hc-ts-interval-queue'
+             , 'hc-ts-interval-stack'
+             , 'ts-atomic-queue'
+             , 'ts-stutter-queue'
+             , 'ts-hardware-queue'
+             , 'ts-hardware-deque'
+             , 'ts-hardware-stack'
+             , 'ts-interval-queue'
+             , 'ts-interval-deque'
+             , 'ts-interval-stack'
              ]
 
 executables = { 
@@ -55,41 +38,46 @@ executables = {
              , 'scal2random' : 'dq-2random -nohw_random'
              , 'wf' : 'wf-ppopp11'
              , 'ebstack' : 'ebstack -delay 20000 -collision 12'#2000 -delay 20000 -collision 12' #250 -delay 13000 -collision 8'
-             , 'tsstutterlist'   : 'tsstack -stutter_clock -list -noinit_threshold'
-             , 'tsstutterarray'  : 'tsstack -stutter_clock -array -noinit_threshold'
-             , 'tsatomiclist'    : 'tsstack -atomic_clock -list -init_threshold'
-             , 'tsatomicarray'   : 'tsstack -atomic_clock -array -init_threshold'
-             , 'tshwlist'        : 'tsstack -hwp_clock -list -init_threshold'
-             , 'tshwarray'       : 'tsstack -hwp_clock -array -init_threshold'
-             , 'tshw2ts'         : 'tsstack -hwp_clock -2ts -init_threshold'# -delay 7500' #250: 20000 2000: 7500
-             , 'tsatomic2ts'         : 'tsstack -atomic_clock -2ts -init_threshold' # -delay 7500' #250: 20000 2000: 7500
-             , 'tsstutter2ts'         : 'tsstack -stutter_clock -2ts -init_threshold' # -delay 7500' #250: 20000 2000: 7500
-             , 'tsqueuestutter'  : 'tsqueue -stutter_clock -list'
-             , 'tsqueueatomic'   : 'tsqueue -atomic_clock -list'
-             , 'tsqueuehw'       : 'tsqueue -hwp_clock -list'
-             , 'tsqueue2ts'      : 'tsqueue -hwp_clock -2ts'# -delay 15000' #250: 12500 2000: 15000
-             , 'tsqueueatomic2ts'      : 'tsqueue -atomic_clock -2ts'#  -delay 17500' #250: 12500 2000: 17500
-             , 'tsqueuestutter2ts'      : 'tsqueue -stutter_clock -2ts'#  -delay 17500' #250: 12500 2000: 17500
-             , 'tsdequestutter'  : 'tsdeque -list -stutter_clock -init_threshold'
-             , 'tsdequeatomic'   : 'tsdeque -list -atomic_clock -init_threshold'
-             , 'tsdequehw'       : 'tsdeque -list -hwp_clock -init_threshold'
-             , 'tsdequehw2ts'    : 'tsdeque -2ts -hwp_clock -init_threshold'# -delay 15000' #250: 17500 2000: 15000
-             , 'tsdequeatomic2ts'    : 'tsdeque -2ts -atomic_clock -init_threshold'# -delay 15000' #250: 17500 2000: 15000
-             , 'tsdequestutter2ts'    : 'tsdeque -2ts -stutter_clock -init_threshold'# -delay 15000' #250: 17500 2000: 15000
-             , 'tsdequeshw'      : 'tsdeques -list -hwp_clock -init_threshold'
-             , 'tsdequeshw2ts'   : 'tsdeques -2ts -hwp_clock -init_threshold'# -delay 10000' #250: 15000 2000: 10000 
-             , 'tsdequesatomic2ts'   : 'tsdeques -2ts -atomic_clock -init_threshold'# -delay 10000' #250: 15000 2000: 10000 
-             , 'tsdequesstutter2ts'   : 'tsdeques -2ts -stutter_clock -init_threshold'# -delay 10000' #250: 15000 2000: 10000 
-             , 'tsdequeqhw'      : 'tsdequeq -list -hwp_clock -init_threshold'
-             , 'tsdequeqhw2ts'   : 'tsdequeq -2ts -hwp_clock -init_threshold'# -delay 17500' #250: 10000 2000: 17250
-             , 'tsdequeqatomic2ts'   : 'tsdequeq -2ts -atomic_clock -init_threshold'# -delay 25000' #250: 25000 2000: 25000
-             , 'tsdequeqstutter2ts'   : 'tsdequeq -2ts -stutter_clock -init_threshold'# -delay 25000' #250: 25000 2000: 25000
-             , 'tsdequeqstutter' : 'tsdequeq -list -stutter_clock -init_threshold'
-             , 'tsdequeqatomic'  : 'tsdequeq -list -atomic_clock -init_threshold'
-             , 'tsdequedhw'      : 'tsdequed -list -hwp_clock -init_threshold'
-             , 'tsdequedhw2ts'   : 'tsdequed -2ts -hwp_clock -init_threshold'# -delay 15000' #250: 25000 2000: 15000
-             , 'tsdequedatomic2ts'   : 'tsdequed -2ts -atomic_clock -init_threshold'# -delay 15000' #250: 25000 2000: 15000
-             , 'tsdequedstutter2ts'   : 'tsdequed -2ts -stutter_clock -init_threshold'# -delay 15000' #250: 25000 2000: 15000
+#             , 'hc-ts-interval-queue'  'hc-ts-interval-queue -delay 10000'
+#             , 'hc-ts-interval-stack'  'hc-ts-interval-stack -delay 10000'
+#             , 'ts-interval-queue'     'ts-interval-queue    -delay 10000'
+#             , 'ts-interval-deque'     'ts-interval-deque    -delay 10000'
+#             , 'ts-interval-stack'     'ts-interval-stack    -delay 10000'
+#              , 'tsstutterlist'   : 'tsstack -stutter_clock -list -noinit_threshold'
+#              , 'tsstutterarray'  : 'tsstack -stutter_clock -array -noinit_threshold'
+#              , 'tsatomiclist'    : 'tsstack -atomic_clock -list -init_threshold'
+#              , 'tsatomicarray'   : 'tsstack -atomic_clock -array -init_threshold'
+#              , 'tshwlist'        : 'tsstack -hwp_clock -list -init_threshold'
+#              , 'tshwarray'       : 'tsstack -hwp_clock -array -init_threshold'
+#              , 'tshw2ts'         : 'tsstack -hwp_clock -2ts -init_threshold'# -delay 7500' #250: 20000 2000: 7500
+#              , 'tsatomic2ts'         : 'tsstack -atomic_clock -2ts -init_threshold' # -delay 7500' #250: 20000 2000: 7500
+#              , 'tsstutter2ts'         : 'tsstack -stutter_clock -2ts -init_threshold' # -delay 7500' #250: 20000 2000: 7500
+#              , 'tsqueuestutter'  : 'tsqueue -stutter_clock -list'
+#              , 'tsqueueatomic'   : 'tsqueue -atomic_clock -list'
+#              , 'tsqueuehw'       : 'tsqueue -hwp_clock -list'
+#              , 'tsqueue2ts'      : 'tsqueue -hwp_clock -2ts'# -delay 15000' #250: 12500 2000: 15000
+#              , 'tsqueueatomic2ts'      : 'tsqueue -atomic_clock -2ts'#  -delay 17500' #250: 12500 2000: 17500
+#              , 'tsqueuestutter2ts'      : 'tsqueue -stutter_clock -2ts'#  -delay 17500' #250: 12500 2000: 17500
+#              , 'tsdequestutter'  : 'tsdeque -list -stutter_clock -init_threshold'
+#              , 'tsdequeatomic'   : 'tsdeque -list -atomic_clock -init_threshold'
+#              , 'tsdequehw'       : 'tsdeque -list -hwp_clock -init_threshold'
+#              , 'tsdequehw2ts'    : 'tsdeque -2ts -hwp_clock -init_threshold'# -delay 15000' #250: 17500 2000: 15000
+#              , 'tsdequeatomic2ts'    : 'tsdeque -2ts -atomic_clock -init_threshold'# -delay 15000' #250: 17500 2000: 15000
+#              , 'tsdequestutter2ts'    : 'tsdeque -2ts -stutter_clock -init_threshold'# -delay 15000' #250: 17500 2000: 15000
+#              , 'tsdequeshw'      : 'tsdeques -list -hwp_clock -init_threshold'
+#              , 'tsdequeshw2ts'   : 'tsdeques -2ts -hwp_clock -init_threshold'# -delay 10000' #250: 15000 2000: 10000 
+#              , 'tsdequesatomic2ts'   : 'tsdeques -2ts -atomic_clock -init_threshold'# -delay 10000' #250: 15000 2000: 10000 
+#              , 'tsdequesstutter2ts'   : 'tsdeques -2ts -stutter_clock -init_threshold'# -delay 10000' #250: 15000 2000: 10000 
+#              , 'tsdequeqhw'      : 'tsdequeq -list -hwp_clock -init_threshold'
+#              , 'tsdequeqhw2ts'   : 'tsdequeq -2ts -hwp_clock -init_threshold'# -delay 17500' #250: 10000 2000: 17250
+#              , 'tsdequeqatomic2ts'   : 'tsdequeq -2ts -atomic_clock -init_threshold'# -delay 25000' #250: 25000 2000: 25000
+#              , 'tsdequeqstutter2ts'   : 'tsdequeq -2ts -stutter_clock -init_threshold'# -delay 25000' #250: 25000 2000: 25000
+#              , 'tsdequeqstutter' : 'tsdequeq -list -stutter_clock -init_threshold'
+#              , 'tsdequeqatomic'  : 'tsdequeq -list -atomic_clock -init_threshold'
+#              , 'tsdequedhw'      : 'tsdequed -list -hwp_clock -init_threshold'
+#              , 'tsdequedhw2ts'   : 'tsdequed -2ts -hwp_clock -init_threshold'# -delay 15000' #250: 25000 2000: 15000
+#              , 'tsdequedatomic2ts'   : 'tsdequed -2ts -atomic_clock -init_threshold'# -delay 15000' #250: 25000 2000: 15000
+#              , 'tsdequedstutter2ts'   : 'tsdequed -2ts -stutter_clock -init_threshold'# -delay 15000' #250: 25000 2000: 15000
              , 'lcrq': 'lcrq -noreuse_memory'
              }
 

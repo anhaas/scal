@@ -28,11 +28,17 @@ if not os.path.exists(outputDir):
 
 #queues = ah_config.allQueues
 queues = [
-              'ebstack'
+             'hc-ts-interval-queue'
+             , 'hc-ts-interval-stack'
+             , 'ts-interval-queue'
+             , 'ts-interval-deque'
+             , 'ts-interval-stack'
              ]
-works = [250, 2000]
+works = [0, 2500, 5000, 7500, 10000, 12500, 15000, 17500, 20000, 22500, 25000, 27500, 30000, 32500, 35000, 35700, 40000]
+threads = [40]
+#works = [250, 2000]
 maxThreads = ah_config.maxThreadsB8
-threads = [1, 10, 20, 30, 40, 50, 60, 70, 80]
+#threads = [1, 10, 20, 30, 40, 50, 60, 70, 80]
 
 if application == "prodcon" or application == "infprod":
   threads = [1, 5, 10, 15, 20, 25, 30, 35, 40]
