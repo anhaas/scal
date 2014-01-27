@@ -3,7 +3,7 @@ bin_PROGRAMS =
 noinst_PROGRAMS =
 TESTS = 
 
-AM_CPPFLAGS = -Werror -mcx16 -m64  -std=c++0x \
+AM_CPPFLAGS = -Werror -mcx16 -m64 -std=c++0x \
         @CC_OPTIMIZATION@ \
         -I${top_srcdir}/src \
         -ffast-math \
@@ -41,6 +41,7 @@ DATASTRUCTURE_INCLUDES = \
 	src/datastructures/ts_stack_buffer.h \
 	src/datastructures/ts_queue_buffer.h \
 	src/datastructures/ts_deque_buffer.h \
+	src/datastructures/dts_queue.h \
 	src/datastructures/enq_pool.h \
 	src/datastructures/spmc_queue.h \
 	src/datastructures/segment_queue.h \
@@ -211,10 +212,20 @@ shortest_path_ts_atomic_queue_SOURCES = \
         $(SHORTESTPATH_BASE_OBJS) \
         src/benchmark/std_glue/glue_ts_atomic_queue.cc
 
+bin_PROGRAMS += shortest-path-hc-ts-atomic-queue
+shortest_path_hc_ts_atomic_queue_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_hardcoded_ts_atomic_queue.cc
+
 bin_PROGRAMS += shortest-path-ts-stutter-queue
 shortest_path_ts_stutter_queue_SOURCES = \
         $(SHORTESTPATH_BASE_OBJS) \
         src/benchmark/std_glue/glue_ts_stutter_queue.cc
+
+bin_PROGRAMS += shortest-path-dts-queue
+shortest_path_dts_queue_SOURCES = \
+        $(SHORTESTPATH_BASE_OBJS) \
+        src/benchmark/std_glue/glue_dts_queue.cc
 
 bin_PROGRAMS += shortest-path-enq
 shortest_path_enq_SOURCES = \
@@ -366,10 +377,20 @@ seqalt_ts_atomic_queue_SOURCES = \
         $(SEQALT_BASE_OBJS) \
         src/benchmark/std_glue/glue_ts_atomic_queue.cc
 
+bin_PROGRAMS += seqalt-hc-ts-atomic-queue
+seqalt_hc_ts_atomic_queue_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_hardcoded_ts_atomic_queue.cc
+
 bin_PROGRAMS += seqalt-ts-stutter-queue
 seqalt_ts_stutter_queue_SOURCES = \
         $(SEQALT_BASE_OBJS) \
         src/benchmark/std_glue/glue_ts_stutter_queue.cc
+
+bin_PROGRAMS += seqalt-dts-queue
+seqalt_dts_queue_SOURCES = \
+        $(SEQALT_BASE_OBJS) \
+        src/benchmark/std_glue/glue_dts_queue.cc
 
 bin_PROGRAMS += seqalt-enq
 seqalt_enq_SOURCES = \
@@ -541,10 +562,20 @@ prodcon_ts_atomic_queue_SOURCES = \
         $(PRODCON_BASE_OBJS) \
         src/benchmark/std_glue/glue_ts_atomic_queue.cc
 
+bin_PROGRAMS += prodcon-hc-ts-atomic-queue
+prodcon_hc_ts_atomic_queue_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_hardcoded_ts_atomic_queue.cc
+
 bin_PROGRAMS += prodcon-ts-stutter-queue
 prodcon_ts_stutter_queue_SOURCES = \
         $(PRODCON_BASE_OBJS) \
         src/benchmark/std_glue/glue_ts_stutter_queue.cc
+
+bin_PROGRAMS += prodcon-dts-queue
+prodcon_dts_queue_SOURCES = \
+        $(PRODCON_BASE_OBJS) \
+        src/benchmark/std_glue/glue_dts_queue.cc
 
 bin_PROGRAMS += prodcon-enq
 prodcon_enq_SOURCES = \
@@ -713,10 +744,20 @@ mandel_ts_atomic_queue_SOURCES = \
         $(MANDEL_BASE_OBJS) \
         src/benchmark/std_glue/glue_ts_atomic_queue.cc
 
+bin_PROGRAMS += mandel-hc-ts-atomic-queue
+mandel_hc_ts_atomic_queue_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_hardcoded_ts_atomic_queue.cc
+
 bin_PROGRAMS += mandel-ts-stutter-queue
 mandel_ts_stutter_queue_SOURCES = \
         $(MANDEL_BASE_OBJS) \
         src/benchmark/std_glue/glue_ts_stutter_queue.cc
+
+bin_PROGRAMS += mandel-dts-queue
+mandel_dts_queue_SOURCES = \
+        $(MANDEL_BASE_OBJS) \
+        src/benchmark/std_glue/glue_dts_queue.cc
 
 bin_PROGRAMS += mandel-enq
 mandel_enq_SOURCES = \

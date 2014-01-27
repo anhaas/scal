@@ -1,5 +1,5 @@
-benchmarks='delay250 delay2000'
-#benchmarks='prodcon'
+#benchmarks='delay250 delay2000'
+benchmarks='prodcon'
 
 for i in 1 2 3 4 5
 #for i in 1 

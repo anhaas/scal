@@ -2,9 +2,8 @@
 // Please see the AUTHORS file for details.  Use of this source code is governed
 // by a BSD license that can be found in the LICENSE file.
 
-#ifndef SCAL_DATASTRUCTURES_TS_QUEUE_BUFFER_H_
-#define SCAL_DATASTRUCTURES_TS_QUEUE_BUFFER_H_
-
+#ifndef SCAL_DATASTRUCTURES_DTS_QUEUE_H_
+#define SCAL_DATASTRUCTURES_DTS_QUEUE_H_
 #define __STDC_FORMAT_MACROS 1  // we want PRIu64 and friends
 #define __STDC_LIMIT_MACROS
 #include <stdint.h>
@@ -13,13 +12,16 @@
 #include <stdio.h>
 
 #include "datastructures/ts_timestamp.h"
+#include "datastructures/queue.h"
 #include "util/threadlocals.h"
 #include "util/malloc.h"
 #include "util/platform.h"
 #include "util/random.h"
 
-template<typename T, typename TimeStamp>
-class TSQueueBuffer {
+#define DTS_DEBUG
+
+template<typename T>
+class DTSQueue : Queue<T>{
   private:
     typedef struct Item {
       std::atomic<Item*> next;
@@ -28,10 +30,15 @@ class TSQueueBuffer {
     } Item;
 
     uint64_t num_threads_;
-    TimeStamp *timestamping_;
+    AtomicCounterTimestamp *timestamping_;
+    AtomicCounterTimestamp *dequeue_timestamping_;
     std::atomic<Item*> **insert_;
     std::atomic<Item*> **remove_;
-    Item** *emptiness_check_pointers_;
+
+#ifdef DTS_DEBUG
+    uint64_t* *counter1_;
+    uint64_t* *counter2_;
+#endif
 
     // Helper function to remove the ABA counter from a pointer.
     inline void *get_aba_free_pointer(void *pointer) {
@@ -52,10 +59,19 @@ class TSQueueBuffer {
     }
 
   public:
-    void initialize(uint64_t num_threads, TimeStamp *timestamping) {
+    void initialize(uint64_t num_threads) {
 
       num_threads_ = num_threads;
-      timestamping_ = timestamping;
+
+      timestamping_ = static_cast<AtomicCounterTimestamp*>(
+          scal::get<AtomicCounterTimestamp>(scal::kCachePrefetch * 4));
+
+      timestamping_->initialize(0, num_threads);
+
+      dequeue_timestamping_ = static_cast<AtomicCounterTimestamp*>(
+          scal::get<AtomicCounterTimestamp>(scal::kCachePrefetch * 4));
+
+      dequeue_timestamping_->initialize(0, num_threads);
 
       insert_ = static_cast<std::atomic<Item*>**>(
           scal::calloc_aligned(num_threads_, sizeof(std::atomic<Item*>*), 
@@ -63,10 +79,6 @@ class TSQueueBuffer {
 
       remove_ = static_cast<std::atomic<Item*>**>(
           scal::calloc_aligned(num_threads_, sizeof(std::atomic<Item*>*), 
-            scal::kCachePrefetch * 4));
-
-      emptiness_check_pointers_ = static_cast<Item***>(
-          scal::calloc_aligned(num_threads_, sizeof(Item**), 
             scal::kCachePrefetch * 4));
 
       for (int i = 0; i < num_threads_; i++) {
@@ -84,28 +96,57 @@ class TSQueueBuffer {
         new_item->next.store(NULL);
         insert_[i]->store(new_item);
         remove_[i]->store(new_item);
-
-        emptiness_check_pointers_[i] = static_cast<Item**> (
-            scal::calloc_aligned(num_threads_, sizeof(Item*), 
-              scal::kCachePrefetch * 4));
       }
+
+#ifdef DTS_DEBUG
+      counter1_ = static_cast<uint64_t**>(
+          scal::calloc_aligned(num_threads, sizeof(uint64_t*),
+            scal::kCachePrefetch * 4));
+      counter2_ = static_cast<uint64_t**>(
+          scal::calloc_aligned(num_threads, sizeof(uint64_t*),
+            scal::kCachePrefetch * 4));
+
+      for (uint64_t i = 0; i < num_threads; i++) {
+        counter1_[i] = scal::get<uint64_t>(scal::kCachePrefetch * 4);
+        *(counter1_[i]) = 0;
+        counter2_[i] = scal::get<uint64_t>(scal::kCachePrefetch * 4);
+        *(counter2_[i]) = 0;
+      }
+#endif
     }
 
-    char* ds_get_stats(void) {
+#ifdef DTS_DEBUG
+    inline void inc_counter1(uint64_t value) {
+      uint64_t thread_id = scal::ThreadContext::get().thread_id();
+      (*counter1_[thread_id]) += value;
+    }
+    
+    inline void inc_counter2(uint64_t value) {
+      uint64_t thread_id = scal::ThreadContext::get().thread_id();
+      (*counter2_[thread_id]) += value;
+    }
+#endif
 
+    char* ds_get_stats(void) {
+#ifdef DTS_DEBUG
       uint64_t sum1 = 0;
       uint64_t sum2 = 1;
 
       for (int i = 0; i < num_threads_; i++) {
-//        sum1 += *counter1_[i];
-//        sum2 += *counter2_[i];
+        sum1 += *counter1_[i];
+        sum2 += *counter2_[i];
+      }
+
+      if (sum1 == 0) {
+        // Avoid division by zero.
+        sum1 = 1;
       }
 
       double avg1 = sum1;
-      avg1 /= (double)40000000.0;
+      avg1 = (double)0;
 
       double avg2 = sum2;
-      avg2 /= (double)40000000.0;
+      avg2 /= (double)sum1;
 
       char buffer[255] = { 0 };
       uint32_t n = snprintf(buffer,
@@ -119,14 +160,20 @@ class TSQueueBuffer {
       char *newbuf = static_cast<char*>(calloc(
           strlen(buffer) + 1, sizeof(*newbuf)));
       return strncpy(newbuf, buffer, strlen(buffer));
+#else
+      return NULL;
+#endif
     }
 
-    inline std::atomic<uint64_t> *insert_left(T element) {
+    inline void insert_element(T element) {
+#ifdef DTS_DEBUG
+      inc_counter1(1);
+#endif
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
 
       // Create a new item.
       Item *new_item = scal::tlget_aligned<Item>(scal::kCachePrefetch);
-      timestamping_->init_top_atomic(new_item->timestamp);
+      timestamping_->set_timestamp(new_item->timestamp);
       new_item->data.store(element);
       new_item->next.store(NULL);
 
@@ -134,24 +181,9 @@ class TSQueueBuffer {
       Item* old_insert = insert_[thread_id]->load();
       old_insert->next.store(new_item);
       insert_[thread_id]->store(new_item);
-
-      //Return a pointer to the timestamp location of the item so that
-      // a timestamp can be assigned.
-      return new_item->timestamp;
     };
 
-    inline std::atomic<uint64_t> *insert_right(T element) {
-      // No explicit insert_right operation is provided, add the element
-      // at the left side instead.
-      return insert_left(element);
-    }
-
-    bool try_remove_right(T *element, uint64_t *invocation_time) {
-      // Initialize the data needed for the emptiness check.
-      uint64_t thread_id = scal::ThreadContext::get().thread_id();
-      Item* *emptiness_check_pointers = 
-        emptiness_check_pointers_[thread_id];
-      bool empty = true;
+    bool try_remove_oldest(T *element, uint64_t *dequeue_timestamp) {
       // Initialize the result pointer to NULL, which means that no 
       // element has been removed.
       Item *result = NULL;
@@ -170,17 +202,16 @@ class TSQueueBuffer {
       // before the buffer is actually accessed.
       Item* old_remove = NULL;
 
-      // Read the start time of the iteration. Items which were timestamped
-      // after the start time do not get removed.
-      uint64_t start_time[2];
-      timestamping_->read_time(start_time);
       // We start iterating of the thread-local lists at a random index.
       uint64_t start = hwrand();
       // We iterate over all thead-local buffers
-      uint64_t num_buffers = (num_threads_ / 2) + 1;
+      uint64_t num_buffers = num_threads_;
       for (uint64_t i = 0; i < num_buffers; i++) {
+#ifdef DTS_DEBUG
+        inc_counter2(1);
+#endif
 
-        uint64_t tmp_buffer_index = (start + i) % num_buffers;
+        uint64_t tmp_buffer_index = (start + i) % (num_buffers);
 
         // We get the remove/insert pointer of the current thread-local 
         // buffer.
@@ -192,49 +223,76 @@ class TSQueueBuffer {
         // If we found an element, we compare it to the oldest element 
         // we have found until now.
         if (get_aba_free_pointer(tmp_remove) != tmp_insert) {
-          empty = false;
-          
           uint64_t *item_timestamp;
           timestamping_->load_timestamp(tmp_timestamp[tmp_index], item->timestamp);
           item_timestamp = tmp_timestamp[tmp_index];
 
-          if (timestamping_->is_later(timestamp, item_timestamp)) {
-            // We found a new oldest element, so we remember it.
-            result = item;
-            buffer_index = tmp_buffer_index;
-            timestamp = item_timestamp;
-            tmp_index ^=1;
-            old_remove = tmp_remove;
-          } 
-        } else {
-          // No element was found, work on the emptiness check.
-          if (emptiness_check_pointers[tmp_buffer_index] 
-              != tmp_remove) {
-            empty = false;
-            emptiness_check_pointers[tmp_buffer_index] = 
-              tmp_remove;
+          // Check if we can remove the element immediately.
+          if (!timestamping_->is_later(item_timestamp, dequeue_timestamp)) {
+            uint64_t expected = 0;
+            if ((remove_[tmp_buffer_index]->load() == tmp_remove) &&
+                remove_[tmp_buffer_index]->compare_exchange_weak(
+                    tmp_remove, (Item*)add_next_aba(item, tmp_remove, 1))) {
+
+              // The item has been removed. 
+              *element = item->data.load(std::memory_order_acquire);
+              return true;
+            } else {
+              // Elimination failed, we have to load a new element of that
+              // buffer.
+              tmp_remove = remove_[tmp_buffer_index]->load();
+              tmp_insert = insert_[tmp_buffer_index]->load();
+              item =((Item*)get_aba_free_pointer(tmp_remove))->next.load();
+              if (get_aba_free_pointer(tmp_remove) != tmp_insert) {
+                timestamping_->load_timestamp(tmp_timestamp[tmp_index], item->timestamp);
+                item_timestamp = tmp_timestamp[tmp_index];
+              }
+            }
+          }
+
+          if (get_aba_free_pointer(tmp_remove) != tmp_insert) {
+            if (timestamping_->is_later(timestamp, item_timestamp)) {
+              // We found a new oldest element, so we remember it.
+              result = item;
+              buffer_index = tmp_buffer_index;
+              timestamp = item_timestamp;
+              tmp_index ^=1;
+              old_remove = tmp_remove;
+            } 
           }
         }
       }
       if (result != NULL) {
-        if (!timestamping_->is_later(timestamp, start_time)) {
-          if (remove_[buffer_index]->load() == old_remove) {
-            if (remove_[buffer_index]->compare_exchange_weak(
-                  old_remove, (Item*)add_next_aba(result, old_remove, 1))) {
-              *element = result->data.load();
-              return true;
-            }
+        if (remove_[buffer_index]->load() == old_remove) {
+          if (remove_[buffer_index]->compare_exchange_weak(
+                old_remove, (Item*)add_next_aba(result, old_remove, 1))) {
+            *element = result->data.load();
+            return true;
           }
         }
       }
       *element = (T)NULL;
-      return !empty;
+      return true;
     }
 
-    bool try_remove_left(T *element, uint64_t *invocation_time) {
-      // No explicit try_remove_left operation is provided, the element
-      // is removed at the right side instead.
-      return try_remove_right(element, invocation_time);
+    inline bool enqueue(T element) {
+      insert_element(element);
+      return true;
+    }
+
+    inline bool dequeue(T *element) {
+      uint64_t dequeue_timestamp[2];
+        dequeue_timestamping_->set_timestamp_local(dequeue_timestamp);
+      while (try_remove_oldest(element, dequeue_timestamp)) {
+
+        if (*element != (T)NULL) {
+          return true;
+        }
+      }
+      // This is unreachable code, because this queue blocks when no 
+      // element can be found, i.e. there does not exist an emptiness
+      // check.
+      return false;
     }
 };
 
