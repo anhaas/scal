@@ -18,6 +18,8 @@
 #include "util/platform.h"
 #include "util/random.h"
 
+#define DTS_DEBUG
+
 template<typename T>
 class DTSQueue : Queue<T>{
   private:
@@ -33,8 +35,10 @@ class DTSQueue : Queue<T>{
     std::atomic<Item*> **insert_;
     std::atomic<Item*> **remove_;
 
+#ifdef DTS_DEBUG
     uint64_t* *counter1_;
     uint64_t* *counter2_;
+#endif
 
     // Helper function to remove the ABA counter from a pointer.
     inline void *get_aba_free_pointer(void *pointer) {
@@ -55,19 +59,19 @@ class DTSQueue : Queue<T>{
     }
 
   public:
-    void initialize(uint64_t num_threads, uint64_t delay) {
+    void initialize(uint64_t num_threads) {
 
       num_threads_ = num_threads;
 
       timestamping_ = static_cast<AtomicCounterTimestamp*>(
           scal::get<AtomicCounterTimestamp>(scal::kCachePrefetch * 4));
 
-      timestamping_->initialize(delay, num_threads);
+      timestamping_->initialize(0, num_threads);
 
       dequeue_timestamping_ = static_cast<AtomicCounterTimestamp*>(
           scal::get<AtomicCounterTimestamp>(scal::kCachePrefetch * 4));
 
-      dequeue_timestamping_->initialize(delay, num_threads);
+      dequeue_timestamping_->initialize(0, num_threads);
 
       insert_ = static_cast<std::atomic<Item*>**>(
           scal::calloc_aligned(num_threads_, sizeof(std::atomic<Item*>*), 
@@ -94,6 +98,7 @@ class DTSQueue : Queue<T>{
         remove_[i]->store(new_item);
       }
 
+#ifdef DTS_DEBUG
       counter1_ = static_cast<uint64_t**>(
           scal::calloc_aligned(num_threads, sizeof(uint64_t*),
             scal::kCachePrefetch * 4));
@@ -107,8 +112,10 @@ class DTSQueue : Queue<T>{
         counter2_[i] = scal::get<uint64_t>(scal::kCachePrefetch * 4);
         *(counter2_[i]) = 0;
       }
+#endif
     }
 
+#ifdef DTS_DEBUG
     inline void inc_counter1(uint64_t value) {
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
       (*counter1_[thread_id]) += value;
@@ -118,9 +125,10 @@ class DTSQueue : Queue<T>{
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
       (*counter2_[thread_id]) += value;
     }
-    
-    char* ds_get_stats(void) {
+#endif
 
+    char* ds_get_stats(void) {
+#ifdef DTS_DEBUG
       uint64_t sum1 = 0;
       uint64_t sum2 = 1;
 
@@ -129,11 +137,16 @@ class DTSQueue : Queue<T>{
         sum2 += *counter2_[i];
       }
 
+      if (sum1 == 0) {
+        // Avoid division by zero.
+        sum1 = 1;
+      }
+
       double avg1 = sum1;
-      avg1 /= (double)40000000.0;
+      avg1 = (double)0;
 
       double avg2 = sum2;
-      avg2 /= (double)40000000.0;
+      avg2 /= (double)sum1;
 
       char buffer[255] = { 0 };
       uint32_t n = snprintf(buffer,
@@ -147,9 +160,15 @@ class DTSQueue : Queue<T>{
       char *newbuf = static_cast<char*>(calloc(
           strlen(buffer) + 1, sizeof(*newbuf)));
       return strncpy(newbuf, buffer, strlen(buffer));
+#else
+      return NULL;
+#endif
     }
 
     inline void insert_element(T element) {
+#ifdef DTS_DEBUG
+      inc_counter1(1);
+#endif
       uint64_t thread_id = scal::ThreadContext::get().thread_id();
 
       // Create a new item.
@@ -183,16 +202,14 @@ class DTSQueue : Queue<T>{
       // before the buffer is actually accessed.
       Item* old_remove = NULL;
 
-      // Read the start time of the iteration. Items which were timestamped
-      // after the start time do not get removed.
-      uint64_t start_time[2];
-      timestamping_->read_time(start_time);
       // We start iterating of the thread-local lists at a random index.
       uint64_t start = hwrand();
       // We iterate over all thead-local buffers
-      uint64_t num_buffers = (num_threads_ / 2) + 1;
+      uint64_t num_buffers = num_threads_;
       for (uint64_t i = 0; i < num_buffers; i++) {
+#ifdef DTS_DEBUG
         inc_counter2(1);
+#endif
 
         uint64_t tmp_buffer_index = (start + i) % (num_buffers);
 
@@ -243,18 +260,14 @@ class DTSQueue : Queue<T>{
               old_remove = tmp_remove;
             } 
           }
-        } else {
-              inc_counter1(1);
         }
       }
       if (result != NULL) {
-        if (!timestamping_->is_later(timestamp, start_time)) {
-          if (remove_[buffer_index]->load() == old_remove) {
-            if (remove_[buffer_index]->compare_exchange_weak(
-                  old_remove, (Item*)add_next_aba(result, old_remove, 1))) {
-              *element = result->data.load();
-              return true;
-            }
+        if (remove_[buffer_index]->load() == old_remove) {
+          if (remove_[buffer_index]->compare_exchange_weak(
+                old_remove, (Item*)add_next_aba(result, old_remove, 1))) {
+            *element = result->data.load();
+            return true;
           }
         }
       }
@@ -269,19 +282,16 @@ class DTSQueue : Queue<T>{
 
     inline bool dequeue(T *element) {
       uint64_t dequeue_timestamp[2];
-   //   if (hwrand() % 2 >= 2) {
-   //     dequeue_timestamp[0] = UINT64_MAX;
-   //   } else {
         dequeue_timestamping_->set_timestamp_local(dequeue_timestamp);
-   //     dequeue_timestamp[0] += 80;
-   //   }
       while (try_remove_oldest(element, dequeue_timestamp)) {
 
         if (*element != (T)NULL) {
           return true;
         }
       }
-      // The queue was empty, return false.
+      // This is unreachable code, because this queue blocks when no 
+      // element can be found, i.e. there does not exist an emptiness
+      // check.
       return false;
     }
 };

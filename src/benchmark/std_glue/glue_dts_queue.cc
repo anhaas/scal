@@ -7,15 +7,13 @@
 #include "benchmark/std_glue/std_pipe_api.h"
 #include "datastructures/dts_queue.h"
 
-DEFINE_uint64(delay, 0, "delay in the insert operation");
-
 #define TS_DS DTSQueue<uint64_t>
 
 TS_DS *ts_;
 
 void* ds_new() {
   ts_ = new TS_DS();
-  ts_->initialize(g_num_threads + 1, FLAGS_delay);
+  ts_->initialize(g_num_threads + 1);
 
   return static_cast<void*>(ts_);
 }
