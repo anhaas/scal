@@ -222,6 +222,9 @@ class TSDequeBuffer {
         // right pointer too to guarantee that a pending right-pointer
         // update of a remove operation does not make the left and the
         // right pointer point to different lists.
+
+        left = (Item*)get_aba_free_pointer(old_left);
+        left->right.store(left);
         Item* old_right = right_[thread_id]->load();
         right_[thread_id]->store((Item*) add_next_aba(left, old_right, 1));
       }
@@ -266,6 +269,8 @@ class TSDequeBuffer {
         // left pointer too to guarantee that a pending left-pointer
         // update of a remove operation does not make the left and the
         // right pointer point to different lists.
+        right = (Item*)get_aba_free_pointer(old_right);
+        right->left.store(right);
         Item* old_left = left_[thread_id]->load();
         left_[thread_id]->store( (Item*) add_next_aba(right, old_left, 1)); }
 
@@ -368,6 +373,24 @@ class TSDequeBuffer {
           uint64_t *item_timestamp;
           timestamping_->load_timestamp(tmp_timestamp[tmp_index], item->timestamp);
           item_timestamp = tmp_timestamp[tmp_index];
+
+          if (inserted_left(item) && !timestamping_->is_later(invocation_time, item_timestamp)) {
+            uint64_t expected = 0;
+            if (item->taken.load() == 0 && item->taken.compare_exchange_weak(expected, 1)) {
+              // Try to adjust the remove pointer. It does not matter if 
+              // this CAS fails.
+              left_[tmp_buffer_index]->compare_exchange_weak(
+                  tmp_left, (Item*)add_next_aba(item, tmp_left, 0));
+              *element = item->data.load();
+              return true;
+            } else {
+              item = get_left_item(tmp_buffer_index);
+              if (item != NULL) {
+                timestamping_->load_timestamp(tmp_timestamp[tmp_index], item->timestamp);
+                item_timestamp = tmp_timestamp[tmp_index];
+              }
+            }
+          }
           
           if (result == NULL || is_more_left(item, item_timestamp, result, timestamp)) {
             // We found a new leftmost item, so we remember it.
@@ -480,31 +503,31 @@ class TSDequeBuffer {
           timestamping_->load_timestamp(tmp_timestamp[tmp_index], item->timestamp);
           item_timestamp = tmp_timestamp[tmp_index];
           
-          if (result == NULL || is_more_right(item, item_timestamp, result, timestamp)) {
+          if (inserted_right(item) && !timestamping_->is_later(invocation_time, item_timestamp)) {
+            uint64_t expected = 0;
+            if (item->taken.load() == 0 && item->taken.compare_exchange_weak(expected, 1)) {
+              // Try to adjust the remove pointer. It does not matter if 
+              // this CAS fails.
+              right_[tmp_buffer_index]->compare_exchange_weak(
+                  tmp_right, (Item*)add_next_aba(item, tmp_right, 0));
+              *element = item->data.load();
+              return true;
+            } else {
+              item = get_right_item(tmp_buffer_index);
+              if (item != NULL) {
+                timestamping_->load_timestamp(tmp_timestamp[tmp_index], item->timestamp);
+                item_timestamp = tmp_timestamp[tmp_index];
+              }
+            }
+          }
+
+          if (item != NULL &&(result == NULL || is_more_right(item, item_timestamp, result, timestamp))) {
             // We found a new youngest element, so we remember it.
             result = item;
             buffer_index = tmp_buffer_index;
             timestamp = item_timestamp;
             tmp_index ^=1;
             old_right = tmp_right;
-
-            // Check if we can remove the element immediately.
-            if (inserted_right(result) || !timestamping_->is_later(invocation_time, timestamp)) {
-              uint64_t expected = 0;
-              if (result->taken.load() == 0) {
-                if (result->taken.compare_exchange_weak(
-                      expected, 1)) {
-
-                  // Try to adjust the remove pointer. It does not matter if 
-                  // this CAS fails.
-                  right_[buffer_index]->compare_exchange_weak(
-                      old_right, (Item*)add_next_aba(result, old_right, 0));
-
-                  *element = result->data.load();
-                  return true;
-                }
-              }
-            }
           }
         } else {
           // No element was found, work on the emptiness check.
