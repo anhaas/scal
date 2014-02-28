@@ -242,7 +242,7 @@ class TSStackBuffer {
           if (!timestamping_->is_later(invocation_time, item_timestamp)) {
             uint64_t expected = 0;
             // We try to set the taken flag and thereby logically remove the item.
-            if (item->taken.compare_exchange_weak(
+            if (item->taken.load() == 0 && item->taken.compare_exchange_weak(
                     expected, 1, 
                     std::memory_order_acq_rel, std::memory_order_relaxed)) {
               // Try to adjust the remove pointer. It does not matter if 

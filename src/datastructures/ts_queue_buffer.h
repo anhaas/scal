@@ -177,7 +177,8 @@ class TSQueueBuffer {
       // We start iterating of the thread-local lists at a random index.
       uint64_t start = hwrand();
       // We iterate over all thead-local buffers
-      uint64_t num_buffers = (num_threads_ / 2) + 1;
+//      uint64_t num_buffers = (num_threads_ / 2) + 1;
+      uint64_t num_buffers = num_threads_;
       for (uint64_t i = 0; i < num_buffers; i++) {
 
         uint64_t tmp_buffer_index = (start + i) % num_buffers;
