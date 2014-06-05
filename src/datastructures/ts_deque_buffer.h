@@ -217,7 +217,7 @@ class TSDequeBuffer {
         left = left->right.load();
       }
 
-      if (left->right.load() == left) {
+      if (left->taken.load() && left->right.load() == left) {
         // The buffer is empty. We have to increase the aba counter of the
         // right pointer too to guarantee that a pending right-pointer
         // update of a remove operation does not make the left and the
@@ -264,7 +264,7 @@ class TSDequeBuffer {
         right = right->left.load();
       }
 
-      if (right->left.load() == right) {
+      if (right->taken.load() && right->left.load() == right) {
         // The buffer is empty. We have to increase the aba counter of the
         // left pointer too to guarantee that a pending left-pointer
         // update of a remove operation does not make the left and the
@@ -392,7 +392,7 @@ class TSDequeBuffer {
             }
           }
           
-          if (result == NULL || is_more_left(item, item_timestamp, result, timestamp)) {
+          if (item != NULL && (result == NULL || is_more_left(item, item_timestamp, result, timestamp))) {
             // We found a new leftmost item, so we remember it.
             result = item;
             buffer_index = tmp_buffer_index;
@@ -521,7 +521,7 @@ class TSDequeBuffer {
             }
           }
 
-          if (item != NULL &&(result == NULL || is_more_right(item, item_timestamp, result, timestamp))) {
+          if (item != NULL && (result == NULL || is_more_right(item, item_timestamp, result, timestamp))) {
             // We found a new youngest element, so we remember it.
             result = item;
             buffer_index = tmp_buffer_index;
